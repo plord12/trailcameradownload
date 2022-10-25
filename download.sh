@@ -5,7 +5,7 @@
 bluetoothmac="D6:30:35:39:28:30"
 bluetoothuuid="0000ffe9-0000-1000-8000-00805f9b34fb"
 cameraip="192.168.8.120"
-signaloriginator="+447881638241"
+signaloriginator="+441189627101"
 signalreceiver="+447867970260 +447974403527"
 
 JAVA_HOME=/home/plord/src/jdk-17.0.2
