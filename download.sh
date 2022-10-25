@@ -13,7 +13,7 @@ export JAVA_HOME
 PATH=$PATH:/usr/local/bin
 export PATH
 
-mkdir -f /tmp/trailcamera
+mkdir -p /tmp/trailcamera
 cd /tmp/trailcamera
 
 echo "Wifi on"
