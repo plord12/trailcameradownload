@@ -8,29 +8,24 @@ cameraip="192.168.8.120"
 camerawifi="CEYOMUR-2a78f93b8ad4"
 camerawifikey="12345678"
 signaloriginator="+441189627101"
-signalreceiver="+447867970260 +447974403527"
+signalreceiver1="+447867970260"
+signalreceiver2="+447974403527"
 
-JAVA_HOME=/home/plord/src/jdk-17.0.2
-export JAVA_HOME
+#
+# for native version of signal-cli
+#
 PATH=$PATH:/usr/local/bin
 export PATH
-DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
-export DBUS_SESSION_BUS_ADDRESS
 
+#
+# use ramdisk
+#
 mkdir -p /tmp/trailcamera
 cd /tmp/trailcamera
 
 echo "Wifi on"
 nmcli radio wifi on
 nmcli connection delete ${camerawifi}
-if [ -f signal.pid ]
-then
-	kill $(cat signal.pid)
-	rm -f signal.pid
-fi
-signal-cli -u ${signaloriginator} daemon >/dev/null 2>&1 &
-sleep 10
-echo $! > signal.pid
 
 #
 # enable trail camera wifi
@@ -44,6 +39,9 @@ bluetoothctl <<!
 gatt.select-attribute ${bluetoothuuid}
 gatt.write "0x47 0x50 0x49 0x4f 0x33"
 !
+echo $?
+
+# maybe try remove if failed
 
 sudo nmcli dev wifi rescan
 
@@ -73,11 +71,6 @@ do
 		nmcli connection delete ${camerawifi}
 		nmcli radio wifi off
 		bluetoothctl disconnect ${bluetoothmac}
-		if [ -f signal.pid ]
-		then
-			kill $(cat signal.pid)
-			rm -f signal.pid
-		fi
 		exit 1
 	fi
 	sleep 5
@@ -88,6 +81,14 @@ echo "Camera alive"
 # battery level
 #
 curl --silent "http://${cameraip}/?custom=1&cmd=3019"
+#
+# all settings
+#
+curl --silent "http://${cameraip}/?custom=1&cmd=3014"
+#
+# remaining space
+#
+curl --silent "http://${cameraip}/?custom=1&cmd=3017"
 
 for mode in 0 1
 do
@@ -116,31 +117,30 @@ do
 		#
 		echo "Downloading ${url}"
 		curl --output "${basename}" --silent "${url}"
-		echo $?
-
-		#
-		# send to signal
-		#
-		# signal-cli -u ${signaloriginator} send +447867970260 +447974403527 -a "${basename}" -m "${timestamp}"
-		#signal-cli --dbus send +447867970260 +447974403527 -a "${basename}" -m "${timestamp}"
-		signal-cli --dbus send -a "${basename}" -m "${timestamp}" ${signalreceiver}
-
-		#
-		# delete local and on camera
-		#
 		if [ $? == 0 ]
 		then
 			#
-			# delete one file
+			# send to signal
 			#
-			curl --output /dev/null --silent "http://${cameraip}/?custom=1&cmd=4003&str=${filename}"
+			signal-cli -u ${signaloriginator} send -a "${basename}" -m "${timestamp}" ${signalreceiver1} ${signalreceiver2}
+
+			#
+			# delete local and on camera
+			#
+			if [ $? == 0 ]
+			then
+				#
+				# delete one file
+				#
+				curl --output /dev/null --silent "http://${cameraip}/?custom=1&cmd=4003&str=${filename}"
+			fi
 		fi
 		rm -f "${basename}"
 
 	done
 done
 
-signal-cli --debus receive >/dev/null 2>&1
+signal-cli -u ${signaloriginator} receive >/dev/null 2>&1
 
 echo "Wifi off"
 nmcli connection delete ${camerawifi}
