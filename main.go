@@ -111,8 +111,20 @@ func main() {
 			break
 		}
 		if len(*signalUser) > 0 && len(*signalRecipient) > 0 {
-			log.Println("signal-cli", "-u", *signalUser, "send", *signalRecipient, "-m", timestamps[i], "-a", tmpFile)
-			cmd := exec.Command("signal-cli", "-u", *signalUser, "send", *signalRecipient, "-m", timestamps[i], "-a", tmpFile)
+
+			var args []string
+			args = append(args, "-u")
+			args = append(args, *signalUser)
+			args = append(args, "send")
+			args = append(args, strings.Split(*signalRecipient, " ")...)
+			args = append(args, "-m")
+			args = append(args, timestamps[i])
+			args = append(args, "-a")
+			args = append(args, tmpFile)
+
+			log.Println("signal-cli", args)
+			cmd := exec.Command("signal-cli", args...)
+
 			stdout, err := cmd.CombinedOutput()
 			if err != nil {
 				log.Println("signal-cli failed - " + string(stdout))
@@ -278,6 +290,8 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 					connectionMap["802-11-wireless-security"] = make(map[string]interface{})
 					connectionMap["802-11-wireless-security"]["key-mgmt"] = "wpa-psk"
 					connectionMap["802-11-wireless-security"]["psk"] = password
+					connectionMap["connection"] = make(map[string]interface{})
+					connectionMap["connection"]["id"] = "camera"
 
 					activeConnection, err := nm.AddAndActivateWirelessConnection(connectionMap, device, accessPoint)
 					if err != nil {

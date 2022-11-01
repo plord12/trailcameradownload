@@ -38,3 +38,5 @@ $ trailcameradownload-linux-arm64 -signalrecipient +44xxxxxxxx -signaluser +44xx
 2022/11/01 10:51:10 signal-cli -u +44xxxxxxxx send +44xxxxxxxx -m 2022/11/01 09:58:22 -a /tmp/image.3369696231.MP4
 2022/11/01 10:51:22 Disconnected from wifi
 ```
+
+![Signal](Screenshot_20221101-151812_Signal.jpg)
