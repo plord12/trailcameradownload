@@ -9,7 +9,7 @@ I chose an [odroid c4](https://ameridroid.com/products/odroid-c4) with [dual wif
 
 * Setup as per odroid intructions - I used armbian
 * see https://github.com/AsamK/signal-cli to install signal-cli
-* `sudo apt-get install vim git man-db bluez psmisc wireless-tools libxml2-utils openjdk-17-jdk`
+* `sudo apt-get install vim git man-db bluez psmisc wireless-tools libxml2-utils openjdk-17-jdk golang-1.19`
 * `git clone https://github.com/plord12/trailcameradownload.git`
 * `cd trailcameradownload`
 * `make`
@@ -17,7 +17,7 @@ I chose an [odroid c4](https://ameridroid.com/products/odroid-c4) with [dual wif
 ## Running
 
 ```
-$ ~/downloader-linux-arm64 -signalrecipient +44xxxxxxxx -signaluser +44xxxxxxxx
+$ trailcameradownload-linux-arm64 -signalrecipient +44xxxxxxxx -signaluser +44xxxxxxxx
 2022/11/01 10:48:12 Enabling bluetooth
 2022/11/01 10:48:12 Scanning bluetooth
 2022/11/01 10:48:13 Found bluetooth device: D6:30:35:39:28:30 CPIO3
