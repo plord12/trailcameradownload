@@ -97,7 +97,10 @@ func main() {
 
 	// get camera status
 	//
-	status(hostname)
+	battery, _ := status(hostname)
+	if battery <= 20 {
+		alert(signalUser, signalRecipient, "Warning: battery low at "+strconv.Itoa(battery)+"%", "")
+	}
 
 	// download any new pictures
 	//
@@ -115,31 +118,15 @@ func main() {
 			os.Remove(tmpFile)
 			break
 		}
-		if len(*signalUser) > 0 && len(*signalRecipient) > 0 {
-
-			var args []string
-			args = append(args, "-u")
-			args = append(args, *signalUser)
-			args = append(args, "send")
-			args = append(args, strings.Split(*signalRecipient, " ")...)
-			args = append(args, "-m")
-			args = append(args, timestamps[i])
-			args = append(args, "-a")
-			args = append(args, tmpFile)
-
-			log.Println("signal-cli", args)
-			cmd := exec.Command("signal-cli", args...)
-
-			stdout, err := cmd.CombinedOutput()
+		err = alert(signalUser, signalRecipient, timestamps[i], tmpFile)
+		if err != nil {
+			log.Println(err.Error())
+		} else {
+			// all good, can now delete on camera
+			//
+			err = delete(files[i], hostname)
 			if err != nil {
-				log.Println("signal-cli failed - " + string(stdout))
-			} else {
-				// all good, can now delete on camera
-				//
-				err = delete(files[i], hostname)
-				if err != nil {
-					log.Println("Failed to delete " + files[i] + " - " + err.Error())
-				}
+				log.Println("Failed to delete " + files[i] + " - " + err.Error())
 			}
 		}
 		os.Remove(tmpFile)
@@ -154,6 +141,35 @@ func main() {
 	// disconnect wifi
 	//
 	disconnectWifi(nm, activeConnection)
+}
+
+// send an alert via signal
+func alert(signalUser *string, signalRecipient *string, message string, attachment string) error {
+	if len(*signalUser) > 0 && len(*signalRecipient) > 0 {
+
+		var args []string
+		args = append(args, "-u")
+		args = append(args, *signalUser)
+		args = append(args, "send")
+		args = append(args, strings.Split(*signalRecipient, " ")...)
+		if len(message) > 0 {
+			args = append(args, "-m")
+			args = append(args, message)
+		}
+		if len(attachment) > 0 {
+			args = append(args, "-a")
+			args = append(args, attachment)
+		}
+		log.Println("signal-cli", args)
+		cmd := exec.Command("signal-cli", args...)
+
+		stdout, err := cmd.CombinedOutput()
+		if err != nil {
+			return errors.New("signal-cli failed - " + string(stdout))
+		}
+	}
+
+	return nil
 }
 
 // Enable and connect to bluetooth device
@@ -469,7 +485,9 @@ type Function struct {
 }
 
 // get status
-func status(hostname string) error {
+func status(hostname string) (int, error) {
+
+	var battery int
 
 	// set date
 	//
@@ -503,10 +521,11 @@ func status(hostname string) error {
 			if err != nil {
 				log.Println("unable to parse 3019 xml - " + err.Error())
 			} else {
+				battery, _ = strconv.Atoi(function.Value)
 				log.Println("Battery at " + function.Value + "%")
 			}
 		}
 	}
 
-	return nil
+	return battery, nil
 }

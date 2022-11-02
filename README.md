@@ -17,26 +17,28 @@ I chose an [odroid c4](https://ameridroid.com/products/odroid-c4) with [dual wif
 ## Running
 
 ```
-$ trailcameradownload-linux-arm64 -signalrecipient +44xxxxxxxx -signaluser +44xxxxxxxx
-2022/11/01 10:48:12 Enabling bluetooth
-2022/11/01 10:48:12 Scanning bluetooth
-2022/11/01 10:48:13 Found bluetooth device: D6:30:35:39:28:30 CPIO3
-2022/11/01 10:48:18 Connected to  D6:30:35:39:28:30
-2022/11/01 10:48:18 Discovering bluetooth services/characteristics
-2022/11/01 10:48:20 Enabled WiFi via bluetooth
-2022/11/01 10:48:23 Looking for wifi ssid CEYOMUR-2a78f93b8ad4
-2022/11/01 10:48:28 Disconnected from wifi
-2022/11/01 10:48:30 Looking for wifi ssid CEYOMUR-2a78f93b8ad4
-2022/11/01 10:48:33 Connected to wifi ssid CEYOMUR-2a78f93b8ad4
-2022/11/01 10:48:34 Downloading http://192.168.8.120/DCIM/PHOTO/IM_00001.JPG
-2022/11/01 10:48:40 signal-cli -u +44xxxxxxxx send +44xxxxxxxx -m 2022/11/01 08:54:38 -a /tmp/image.3954662640.JPG
-2022/11/01 10:48:43 Downloading http://192.168.8.120/DCIM/MOVIE/VD_00001.MP4
-2022/11/01 10:49:48 signal-cli -u +44xxxxxxxx send +44xxxxxxxx -m 2022/11/01 08:54:50 -a /tmp/image.2097254080.MP4
-2022/11/01 10:49:59 Downloading http://192.168.8.120/DCIM/PHOTO/IM_00002.JPG
-2022/11/01 10:50:06 signal-cli -u +44xxxxxxxx send +44xxxxxxxx -m 2022/11/01 09:58:12 -a /tmp/image.1607871999.JPG
-2022/11/01 10:50:10 Downloading http://192.168.8.120/DCIM/MOVIE/VD_00002.MP4
-2022/11/01 10:51:10 signal-cli -u +44xxxxxxxx send +44xxxxxxxx -m 2022/11/01 09:58:22 -a /tmp/image.3369696231.MP4
-2022/11/01 10:51:22 Disconnected from wifi
+$ trailcameradownload-linux-arm64 -signalrecipient "+44xxxxxxxxxx" -signaluser +44xxxxxxxxxx
+2022/11/02 15:42:01 Enabling bluetooth
+2022/11/02 15:42:01 Scanning bluetooth for D6:30:35:.*
+2022/11/02 15:42:12 Found bluetooth device: D6:30:35:39:28:30
+2022/11/02 15:42:13 Connected to  D6:30:35:39:28:30
+2022/11/02 15:42:13 Discovering bluetooth services/characteristics
+2022/11/02 15:42:14 Enabled WiFi via bluetooth
+2022/11/02 15:42:16 Looking for wifi ssid CEYOMUR-.*
+2022/11/02 15:42:18 Looking for wifi ssid CEYOMUR-.*
+2022/11/02 15:42:20 Looking for wifi ssid CEYOMUR-.*
+2022/11/02 15:42:22 Looking for wifi ssid CEYOMUR-.*
+2022/11/02 15:42:24 Looking for wifi ssid CEYOMUR-.*
+2022/11/02 15:42:27 Connected to wifi ssid CEYOMUR-2a78f93b8ad4
+2022/11/02 15:42:27 Date set to 2022-11-02
+2022/11/02 15:42:27 Time set to 15:42:27
+2022/11/02 15:42:28 Battery at 85%
+2022/11/02 15:42:31 2 files on camera
+2022/11/02 15:42:31 Downloading http://192.168.8.120/DCIM/PHOTO/IM_00001.JPG
+2022/11/02 15:42:36 signal-cli [-u +44xxxxxxxxxx send +44xxxxxxxxxx -m 2022/11/02 15:40:54 -a /tmp/image.1214875969.JPG]
+2022/11/02 15:42:40 Downloading http://192.168.8.120/DCIM/MOVIE/VD_00001.MP4
+2022/11/02 15:44:29 signal-cli [-u +44xxxxxxxxxx send +44xxxxxxxxxx -m 2022/11/02 15:41:06 -a /tmp/image.3880520381.MP4]
+2022/11/02 15:44:41 Disconnected from wifi
 ```
 
 <img src="Screenshot_20221101-151812_Signal.jpg" width="400">
