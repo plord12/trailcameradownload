@@ -94,6 +94,10 @@ func main() {
 		log.Panicf(err.Error())
 	}
 
+	// get camera status
+	//
+	status(hostname)
+
 	// download any new pictures
 	//
 	files, timestamps, err := listFiles(hostname)
@@ -413,6 +417,8 @@ func listFiles(hostname string) ([]string, []string, error) {
 		sortedTimestamps = append(sortedTimestamps, file.Time)
 	}
 
+	log.Println(strconv.Itoa(len(sortedFiles)) + " files on camera")
+
 	return sortedFiles, sortedTimestamps, nil
 }
 
@@ -449,6 +455,56 @@ func delete(file string, hostname string) error {
 	_, err := http.Get("http://" + hostname + "/?custom=1&cmd=4003&str=" + file)
 	if err != nil {
 		return errors.New("unable to delete file - " + err.Error())
+	}
+
+	return nil
+}
+
+type Function struct {
+	XMLName xml.Name `xml:"Function"`
+	Cmd     string   `xml:"Cmd"`
+	Status  string   `xml:"Status"`
+	Value   string   `xml:"Value"`
+}
+
+// get status
+func status(hostname string) error {
+
+	// set date
+	//
+	currentTime := time.Now()
+	date := currentTime.Format("2006-01-02")
+	_, err := http.Get("http://" + hostname + "/?custom=1&cmd=3005&str=" + date)
+	if err != nil {
+		log.Println("Unable to set date to " + date + " - " + err.Error())
+	} else {
+		log.Println("Date set to " + date)
+	}
+	time := currentTime.Format("15:04:05")
+	_, err = http.Get("http://" + hostname + "/?custom=1&cmd=3006&str=" + time)
+	if err != nil {
+		log.Println("Unable to set time to " + time + " - " + err.Error())
+	} else {
+		log.Println("Time set to " + time)
+	}
+
+	// battery level (?)
+	//
+	resp, err := http.Get("http://" + hostname + "/?custom=1&cmd=3019")
+	if err != nil {
+		log.Println("Unable to get 3019 - " + err.Error())
+	} else {
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err == nil {
+			var function Function
+			err = xml.Unmarshal(body, &function)
+			if err != nil {
+				log.Println("unable to parse 3019 xml - " + err.Error())
+			} else {
+				log.Println("Battery at " + function.Value + "%")
+			}
+		}
 	}
 
 	return nil
