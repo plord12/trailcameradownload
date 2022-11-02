@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,9 +27,9 @@ func main() {
 
 	// parse arguments
 	//
-	address := flag.String("address", "D6:30:35:39:28:30", "Bluetooth address")
+	address := flag.String("address", "D6:30:35:.*", "Bluetooth address")
 	uuid := flag.String("characteristic", "0000ffe9-0000-1000-8000-00805f9b34fb", "Bluetooth characteristic uuid")
-	ssid := flag.String("ssid", "CEYOMUR-2a78f93b8ad4", "WiFi SSID")
+	ssid := flag.String("ssid", "CEYOMUR-.*", "WiFi SSID")
 	password := flag.String("password", "12345678", "WiFi password")
 	signalUser := flag.String("signaluser", "", "Signal messenger username")
 	signalRecipient := flag.String("signalrecipient", "", "Signal messenger recipient - quote for multiple users")
@@ -170,10 +171,11 @@ func connectBluetooth(address *string) (*bluetooth.Device, error) {
 
 	// Start scanning
 	//
-	log.Println("Scanning bluetooth")
+	log.Println("Scanning bluetooth for " + *address)
 	err = adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
 		log.Println("Found bluetooth device:", result.Address.String(), result.LocalName())
-		if result.Address.String() == *address {
+		match, _ := regexp.MatchString(*address, result.Address.String())
+		if match {
 			adapter.StopScan()
 			ch <- result
 		}
@@ -285,9 +287,8 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 					return nm, nil, "", errors.New("unable to get wifi access point name - " + err.Error())
 				}
 
-				// FIX THIS - probabally better with regex match
-				//
-				if name == *ssid {
+				match, _ := regexp.MatchString(*ssid, name)
+				if match {
 					connectionMap := make(map[string]map[string]interface{})
 					connectionMap["802-11-wireless"] = make(map[string]interface{})
 					connectionMap["802-11-wireless"]["security"] = "802-11-wireless-security"
@@ -311,7 +312,7 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 							if err != nil {
 								return nm, nil, "", errors.New("unable to get camera IP address - " + err.Error())
 							}
-							log.Println("Connected to wifi ssid " + *ssid)
+							log.Println("Connected to wifi ssid " + name)
 							return nm, activeConnection, cameraIP, nil
 						} else {
 							time.Sleep(time.Millisecond * 250)
