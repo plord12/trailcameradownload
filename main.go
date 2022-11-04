@@ -44,7 +44,7 @@ func main() {
 		bluetoothDevice, err = connectBluetooth(address)
 		if err != nil {
 			if bluetoothDevice != nil {
-				disableBluetooth(bluetoothDevice)
+				disableBluetooth(bluetoothDevice, uuid)
 			}
 			// wait a bit betwwen attempts
 			//
@@ -55,19 +55,16 @@ func main() {
 	}
 	if err != nil {
 		if bluetoothDevice != nil {
-			disableBluetooth(bluetoothDevice)
+			disableBluetooth(bluetoothDevice, uuid)
 		}
 		log.Panicf(err.Error())
 	}
 
 	err = enableWifi(bluetoothDevice, uuid)
 	if err != nil {
-		disableBluetooth(bluetoothDevice)
+		disableBluetooth(bluetoothDevice, uuid)
 		log.Panicf(err.Error())
 	}
-	// disable bluetooth
-	//
-	disableBluetooth(bluetoothDevice)
 
 	// connect to wifi - loop and wait
 	//
@@ -79,6 +76,7 @@ func main() {
 		nm, activeConnection, hostname, err = connectWifi(ssid, password)
 		if err != nil {
 			if activeConnection != nil {
+				disableBluetooth(bluetoothDevice, uuid)
 				disconnectWifi(nm, activeConnection)
 			}
 			// wait a bit betwwen attempts
@@ -90,6 +88,7 @@ func main() {
 	}
 	if err != nil {
 		if activeConnection != nil {
+			disableBluetooth(bluetoothDevice, uuid)
 			disconnectWifi(nm, activeConnection)
 		}
 		log.Panicf(err.Error())
@@ -107,6 +106,7 @@ func main() {
 	files, timestamps, err := listFiles(hostname)
 	if err != nil {
 		if activeConnection != nil {
+			disableBluetooth(bluetoothDevice, uuid)
 			disconnectWifi(nm, activeConnection)
 		}
 		log.Panicf(err.Error())
@@ -137,6 +137,10 @@ func main() {
 	if len(*signalUser) > 0 {
 		exec.Command("signal-cli", "-u", *signalUser, "receive")
 	}
+
+	// disable bluetooth
+	//
+	disableBluetooth(bluetoothDevice, uuid)
 
 	// disconnect wifi
 	//
@@ -249,9 +253,31 @@ func enableWifi(device *bluetooth.Device, uuid *string) error {
 }
 
 // disable bluetooth
-func disableBluetooth(device *bluetooth.Device) error {
+func disableBluetooth(device *bluetooth.Device, uuid *string) error {
 
-	err := device.Disconnect()
+	srvcs, err := device.DiscoverServices(nil)
+	if err != nil {
+		return errors.New("failed to discover bluetooth services - " + err.Error())
+	}
+
+	// find and write to characteristic
+	//
+	for _, srvc := range srvcs {
+		chars, err := srvc.DiscoverCharacteristics(nil)
+		if err != nil {
+			return errors.New("failed to discover bluetooth characteristics - " + err.Error())
+		}
+		for _, char := range chars {
+			if char.UUID().String() == *uuid {
+				char.WriteWithoutResponse([]byte{0x47, 0x50, 0x49, 0x4f, 0x32})
+				log.Println("Disabled WiFi via bluetooth")
+			}
+		}
+	}
+
+	time.Sleep(time.Second)
+
+	err = device.Disconnect()
 	if err != nil {
 		return errors.New("failed to disable bluetooth - " + err.Error())
 	}
