@@ -28,7 +28,7 @@ func main() {
 	// parse arguments
 	//
 	address := flag.String("address", "D6:30:35:.*", "Bluetooth address")
-	uuid := flag.String("characteristic", "0000ffe9-0000-1000-8000-00805f9b34fb", "Bluetooth characteristic uuid")
+	uuid := flag.String("characteristic", "0000ffe9-0000-1000-8000-00805f9b34fb", "Bluetooth characteristic UUID")
 	ssid := flag.String("ssid", "CEYOMUR-.*", "WiFi SSID")
 	password := flag.String("password", "12345678", "WiFi password")
 	signalUser := flag.String("signaluser", "", "Signal messenger username")
@@ -43,6 +43,7 @@ func main() {
 	for attempt := 1; attempt < 10; attempt++ {
 		bluetoothDevice, err = connectBluetooth(address)
 		if err != nil {
+			log.Println("Bluetooth connect failed [" + strconv.Itoa(attempt) + " of 10] - " + string(err.Error()))
 			if bluetoothDevice != nil {
 				disableBluetooth(bluetoothDevice, uuid)
 			}
@@ -59,8 +60,15 @@ func main() {
 		}
 		log.Panicf(err.Error())
 	}
-
-	err = enableWifi(bluetoothDevice, uuid)
+	for attempt := 1; attempt < 10; attempt++ {
+		err = enableWifi(bluetoothDevice, uuid)
+		if err != nil {
+			log.Println("Enable WiFi failed [" + strconv.Itoa(attempt) + " of 10] - " + string(err.Error()))
+		} else {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	if err != nil {
 		disableBluetooth(bluetoothDevice, uuid)
 		log.Panicf(err.Error())
@@ -75,6 +83,7 @@ func main() {
 	for attempt := 1; attempt < 10; attempt++ {
 		nm, activeConnection, hostname, err = connectWifi(ssid, password)
 		if err != nil {
+			log.Println("WiFi connect failed [" + strconv.Itoa(attempt) + " of 10] - " + string(err.Error()))
 			if activeConnection != nil {
 				disableBluetooth(bluetoothDevice, uuid)
 				disconnectWifi(nm, activeConnection)
@@ -91,7 +100,29 @@ func main() {
 			disableBluetooth(bluetoothDevice, uuid)
 			disconnectWifi(nm, activeConnection)
 		}
-		log.Panicf(err.Error())
+
+		// wifi failed ... so some diagnostics
+		//
+		log.Println("WiFi connection failed")
+
+		log.Println("nmcli general status")
+		cmd := exec.Command("nmcli", "general", "status")
+		stdout, _ := cmd.CombinedOutput()
+		log.Println(string(stdout[:]))
+		log.Println("nmcli connection show")
+		cmd = exec.Command("nmcli", "connection", "show")
+		stdout, _ = cmd.CombinedOutput()
+		log.Println(string(stdout[:]))
+		log.Println("nmcli device status")
+		cmd = exec.Command("nmcli", "device", "status")
+		stdout, _ = cmd.CombinedOutput()
+		log.Println(string(stdout[:]))
+		log.Println("nmcli dev wifi list")
+		cmd = exec.Command("nmcli", "dev", "wifi", "list")
+		stdout, _ = cmd.CombinedOutput()
+		log.Println(string(stdout[:]))
+
+		os.Exit(1)
 	}
 
 	// get camera status
@@ -132,12 +163,6 @@ func main() {
 		os.Remove(tmpFile)
 	}
 
-	// keep signal happy
-	//
-	if len(*signalUser) > 0 {
-		exec.Command("signal-cli", "-u", *signalUser, "receive")
-	}
-
 	// disable bluetooth
 	//
 	disableBluetooth(bluetoothDevice, uuid)
@@ -150,6 +175,14 @@ func main() {
 // send an alert via signal
 func alert(signalUser *string, signalRecipient *string, message string, attachment string) error {
 	if len(*signalUser) > 0 && len(*signalRecipient) > 0 {
+
+		// keep signal happy
+		//
+		cmd := exec.Command("signal-cli", "-u", *signalUser, "receive")
+		stdout, err := cmd.CombinedOutput()
+		if err != nil {
+			return errors.New("signal-cli failed - " + string(stdout))
+		}
 
 		var args []string
 		args = append(args, "-u")
@@ -165,9 +198,9 @@ func alert(signalUser *string, signalRecipient *string, message string, attachme
 			args = append(args, attachment)
 		}
 		log.Println("signal-cli", args)
-		cmd := exec.Command("signal-cli", args...)
+		cmd = exec.Command("signal-cli", args...)
 
-		stdout, err := cmd.CombinedOutput()
+		stdout, err = cmd.CombinedOutput()
 		if err != nil {
 			return errors.New("signal-cli failed - " + string(stdout))
 		}
@@ -209,7 +242,12 @@ func connectBluetooth(address *string) (*bluetooth.Device, error) {
 	var device *bluetooth.Device
 	select {
 	case result := <-ch:
-		device, err = adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+		for attempt := 1; attempt < 2; attempt++ {
+			device, err = adapter.Connect(result.Address, bluetooth.ConnectionParams{})
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
 			return nil, errors.New("failed to connect to bluetooth device - " + err.Error())
 		}
@@ -278,6 +316,7 @@ func disableBluetooth(device *bluetooth.Device, uuid *string) error {
 	time.Sleep(time.Second)
 
 	err = device.Disconnect()
+	time.Sleep(time.Second)
 	if err != nil {
 		return errors.New("failed to disable bluetooth - " + err.Error())
 	}
@@ -288,7 +327,7 @@ func disableBluetooth(device *bluetooth.Device, uuid *string) error {
 // connect to wifi
 func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManager, gonetworkmanager.ActiveConnection, string, error) {
 
-	log.Println("Looking for wifi ssid " + *ssid)
+	log.Println("Looking for WiFi SSID " + *ssid)
 
 	// Create new instance of gonetworkmanager
 	//
@@ -316,17 +355,17 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 
 			deviceWireless, err := gonetworkmanager.NewDeviceWireless(device.GetPath())
 			if err != nil {
-				return nm, nil, "", errors.New("unable to get wifi properties - " + err.Error())
+				return nm, nil, "", errors.New("unable to get WiFi properties - " + err.Error())
 			}
 			deviceWireless.RequestScan() // note ignore any errors
 			accessPoints, err := deviceWireless.GetAllAccessPoints()
 			if err != nil {
-				return nm, nil, "", errors.New("unable to get wifi access points - " + err.Error())
+				return nm, nil, "", errors.New("unable to get WiFi access points - " + err.Error())
 			}
 			for _, accessPoint := range accessPoints {
 				name, err := accessPoint.GetPropertySSID()
 				if err != nil {
-					return nm, nil, "", errors.New("unable to get wifi access point name - " + err.Error())
+					return nm, nil, "", errors.New("unable to get WiFi access point name - " + err.Error())
 				}
 
 				match, _ := regexp.MatchString(*ssid, name)
@@ -354,7 +393,7 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 							if err != nil {
 								return nm, nil, "", errors.New("unable to get camera IP address - " + err.Error())
 							}
-							log.Println("Connected to wifi ssid " + name)
+							log.Println("Connected to WiFi SSID " + name)
 							return nm, activeConnection, cameraIP, nil
 						} else {
 							time.Sleep(time.Millisecond * 250)
@@ -369,7 +408,7 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 		}
 	}
 
-	return nm, nil, "", errors.New("ssid not found")
+	return nm, nil, "", errors.New("SSID not found")
 }
 
 // disconnect from wifi
@@ -378,9 +417,8 @@ func disconnectWifi(nm gonetworkmanager.NetworkManager, activeConnection gonetwo
 	connection, err := activeConnection.GetPropertyConnection()
 	if err == nil {
 		connection.Delete()
+		log.Println("Disconnected from WiFi")
 	}
-
-	log.Println("Disconnected from wifi")
 
 	return nil
 }
