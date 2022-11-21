@@ -22,7 +22,7 @@ ${BINDIR}/${NAME}-linux-amd64: ${SOURCES}
 	GOARCH=amd64 GOOS=linux go build -o $@ $^
 
 ${BINDIR}/${NAME}-linux-arm64: ${SOURCES}
-	GOARCH=arm64 GOOS=linux go build -o $@ $^
+	CGO_LDFLAGS=-L/usr/local/lib GOARCH=arm64 GOOS=linux go build -o $@ $^
 
 ${BINDIR}/${NAME}-linux-arm: ${SOURCES}
 	GOARCH=arm GOOS=linux go build -o $@ $^

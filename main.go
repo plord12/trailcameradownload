@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wifx/gonetworkmanager"
@@ -22,6 +23,13 @@ import (
 )
 
 var adapter = bluetooth.DefaultAdapter
+
+type Picture struct {
+	fileName  string
+	timeStamp string
+}
+
+var wg sync.WaitGroup
 
 func main() {
 
@@ -33,6 +41,10 @@ func main() {
 	password := flag.String("password", "12345678", "WiFi password")
 	signalUser := flag.String("signaluser", "", "Signal messenger username")
 	signalRecipient := flag.String("signalrecipient", "", "Signal messenger recipient - quote for multiple users")
+	modelPath := flag.String("model", "detect.tflite", "path to model file")
+	labelPath := flag.String("label", "labelmap.txt", "path to label file")
+	limits := flag.Int("limits", 5, "limits of items")
+
 	flag.Parse()
 
 	var err error
@@ -142,6 +154,11 @@ func main() {
 		}
 		log.Panicf(err.Error())
 	}
+
+	jobChan := make(chan Picture, 100)
+	wg.Add(1)
+	go worker(jobChan, hostname, signalUser, signalRecipient, modelPath, labelPath, limits)
+
 	for i := 0; i < len(files); i++ {
 		tmpFile, err := download(files[i], hostname)
 		if err != nil {
@@ -149,19 +166,11 @@ func main() {
 			os.Remove(tmpFile)
 			break
 		}
-		err = alert(signalUser, signalRecipient, timestamps[i], tmpFile)
-		if err != nil {
-			log.Println(err.Error())
-		} else {
-			// all good, can now delete on camera
-			//
-			err = delete(files[i], hostname)
-			if err != nil {
-				log.Println("Failed to delete " + files[i] + " - " + err.Error())
-			}
-		}
-		os.Remove(tmpFile)
+		// queue processing and deleting
+		jobChan <- Picture{tmpFile, timestamps[i]}
 	}
+
+	log.Println("Finished download")
 
 	// disable bluetooth
 	//
@@ -170,10 +179,44 @@ func main() {
 	// disconnect wifi
 	//
 	disconnectWifi(nm, activeConnection)
+
+	// wait for queue to complete
+	//
+	close(jobChan)
+	wg.Wait()
+	log.Println("Finished")
+}
+
+// process work in a queue
+func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, modelPath *string, labelPath *string, limits *int) {
+	defer wg.Done()
+	for picture := range jobChan {
+
+		outputfileName, description, err := objectDetect(&picture.fileName, modelPath, labelPath, limits)
+		if err != nil {
+			log.Println(err.Error())
+			err = alert(signalUser, signalRecipient, picture.timeStamp, picture.fileName)
+			os.Remove(picture.fileName)
+		} else {
+			err = alert(signalUser, signalRecipient, picture.timeStamp+" "+*description, picture.fileName+" "+*outputfileName)
+			os.Remove(picture.fileName)
+			os.Remove(*outputfileName)
+		}
+		if err != nil {
+			log.Println(err.Error())
+		} else {
+			// all good, can now delete on camera
+			//
+			err = delete(picture.fileName, hostname)
+			if err != nil {
+				log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+			}
+		}
+	}
 }
 
 // send an alert via signal
-func alert(signalUser *string, signalRecipient *string, message string, attachment string) error {
+func alert(signalUser *string, signalRecipient *string, message string, attachments string) error {
 	if len(*signalUser) > 0 && len(*signalRecipient) > 0 {
 
 		// keep signal happy
@@ -193,9 +236,9 @@ func alert(signalUser *string, signalRecipient *string, message string, attachme
 			args = append(args, "-m")
 			args = append(args, message)
 		}
-		if len(attachment) > 0 {
+		if len(attachments) > 0 {
 			args = append(args, "-a")
-			args = append(args, attachment)
+			args = append(args, strings.Split(attachments, " ")...)
 		}
 		log.Println("signal-cli", args)
 		cmd = exec.Command("signal-cli", args...)
