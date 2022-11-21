@@ -25,8 +25,9 @@ import (
 var adapter = bluetooth.DefaultAdapter
 
 type Picture struct {
-	fileName  string
-	timeStamp string
+	fileName    string
+	tmpFilename string
+	timeStamp   string
 }
 
 var wg sync.WaitGroup
@@ -167,7 +168,7 @@ func main() {
 			break
 		}
 		// queue processing and deleting
-		jobChan <- Picture{tmpFile, timestamps[i]}
+		jobChan <- Picture{files[i], tmpFile, timestamps[i]}
 	}
 
 	log.Println("Finished download")
@@ -192,14 +193,14 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 	defer wg.Done()
 	for picture := range jobChan {
 
-		outputfileName, description, err := objectDetect(&picture.fileName, modelPath, labelPath, limits)
+		outputfileName, description, err := objectDetect(&picture.tmpFilename, modelPath, labelPath, limits)
 		if err != nil {
 			log.Println(err.Error())
-			err = alert(signalUser, signalRecipient, picture.timeStamp, picture.fileName)
-			os.Remove(picture.fileName)
+			err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
+			os.Remove(picture.tmpFilename)
 		} else {
-			err = alert(signalUser, signalRecipient, picture.timeStamp+" "+*description, picture.fileName+" "+*outputfileName)
-			os.Remove(picture.fileName)
+			err = alert(signalUser, signalRecipient, picture.timeStamp+" "+*description, picture.tmpFilename+" "+*outputfileName)
+			os.Remove(picture.tmpFilename)
 			os.Remove(*outputfileName)
 		}
 		if err != nil {
