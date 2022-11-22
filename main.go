@@ -173,6 +173,12 @@ func main() {
 
 	log.Println("Finished download")
 
+	// wait for queue to complete ... dequeue deletes the files once processed so we need to keep wifi working
+	//
+	close(jobChan)
+	wg.Wait()
+	log.Println("Finished")
+
 	// disable bluetooth
 	//
 	disableBluetooth(bluetoothDevice, uuid)
@@ -181,11 +187,6 @@ func main() {
 	//
 	disconnectWifi(nm, activeConnection)
 
-	// wait for queue to complete
-	//
-	close(jobChan)
-	wg.Wait()
-	log.Println("Finished")
 }
 
 // process work in a queue
