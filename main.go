@@ -581,6 +581,7 @@ func delete(file string, hostname string) error {
 	if err != nil {
 		return errors.New("unable to delete file - " + err.Error())
 	}
+	log.Println("Deleted " + file)
 
 	return nil
 }
