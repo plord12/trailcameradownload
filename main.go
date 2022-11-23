@@ -45,7 +45,7 @@ func main() {
 	modelPath := flag.String("model", "detect.tflite", "path to model file")
 	labelPath := flag.String("label", "labelmap.txt", "path to label file")
 	limits := flag.Int("limits", 5, "limits of items")
-	savejpg := flag.Bool("savejpg", false, "save jpg files to $HOME/jpg")
+	savejpg := flag.Bool("savejpg", false, "save jpg files to $HOME/photos")
 
 	flag.Parse()
 
@@ -81,7 +81,7 @@ func main() {
 		} else {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
 		disableBluetooth(bluetoothDevice, uuid)
