@@ -45,6 +45,7 @@ func main() {
 	modelPath := flag.String("model", "detect.tflite", "path to model file")
 	labelPath := flag.String("label", "labelmap.txt", "path to label file")
 	limits := flag.Int("limits", 5, "limits of items")
+	savejpg := flag.Bool("savejpg", false, "save jpg files to $HOME/jpg")
 
 	flag.Parse()
 
@@ -169,6 +170,27 @@ func main() {
 		}
 		// queue processing and deleting
 		jobChan <- Picture{files[i], tmpFile, timestamps[i]}
+
+		// save a copy of the file
+		if *savejpg && filepath.Ext(files[i]) == "JPG" {
+			source, err := os.Open(tmpFile)
+			if err != nil {
+				log.Println("Unable to open " + files[i] + " for copy - " + err.Error())
+				break
+			}
+			defer source.Close()
+			destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", timestamps[i]+".*.jpg")
+			if err != nil {
+				log.Println("Unable to open " + destination.Name() + " for copy - " + err.Error())
+				break
+			}
+			_, err = io.Copy(destination, source)
+			if err != nil {
+				log.Println("Unable to copy " + files[i] + " - " + err.Error())
+				break
+			}
+			defer destination.Close()
+		}
 	}
 
 	log.Println("Finished download")
