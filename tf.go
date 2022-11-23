@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	_ "image/jpeg"
 	_ "image/png"
 	"io/ioutil"
 	"log"
@@ -134,11 +135,15 @@ func objectDetect(inputVideo *string, modelPath *string, labelPath *string, limi
 	cam, err := gocv.OpenVideoCapture(*inputVideo)
 	if err != nil {
 		cancel()
-		return nil, nil, errors.New("cannot open camera: " + err.Error())
+		return nil, nil, errors.New("cannot open input: " + err.Error())
 	}
 	defer cam.Close()
 
 	vw, err := gocv.VideoWriterFile(outputVideo, cam.CodecString(), cam.Get(gocv.VideoCaptureFPS), int(cam.Get(gocv.VideoCaptureFrameWidth)), int(cam.Get(gocv.VideoCaptureFrameHeight)), true)
+	if err != nil {
+		cancel()
+		return nil, nil, errors.New("cannot open output: " + err.Error())
+	}
 	defer vw.Close()
 
 	model := tflite.NewModelFromFile(*modelPath)

@@ -172,7 +172,7 @@ func main() {
 		jobChan <- Picture{files[i], tmpFile, timestamps[i]}
 
 		// save a copy of the file
-		if *savejpg && filepath.Ext(files[i]) == "JPG" {
+		if *savejpg && filepath.Ext(files[i]) == ".JPG" {
 			source, err := os.Open(tmpFile)
 			if err != nil {
 				log.Println("Unable to open " + files[i] + " for copy - " + err.Error())
