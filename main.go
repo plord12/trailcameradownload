@@ -179,9 +179,9 @@ func main() {
 				break
 			}
 			defer source.Close()
-			destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", timestamps[i]+".*.jpg")
+			destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", strings.Replace(strings.Replace(timestamps[i]+".*.jpg", "/", "_", -1), " ", "_", -1))
 			if err != nil {
-				log.Println("Unable to open " + destination.Name() + " for copy - " + err.Error())
+				log.Println("Unable to open " + os.Getenv("HOME") + "/photos/" + timestamps[i] + ".*.jpg" + " for copy - " + err.Error())
 				break
 			}
 			_, err = io.Copy(destination, source)
