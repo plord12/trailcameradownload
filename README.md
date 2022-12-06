@@ -88,4 +88,4 @@ $ trailcameradownload-linux-arm64 -signalrecipient "+44xxxxxxxxxx" -signaluser +
 2022/12/06 06:34:02 Disconnected from WiFi
 ```
 
-<img src="Screenshot_20221101-151812_Signal.jpg" width="400">
+<img src="phone.jpg" width="400">
