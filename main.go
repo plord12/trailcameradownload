@@ -32,6 +32,8 @@ type Picture struct {
 
 var wg sync.WaitGroup
 
+var modelLoaded = false
+
 func main() {
 
 	// parse arguments
@@ -51,6 +53,15 @@ func main() {
 
 	var err error
 	var bluetoothDevice *bluetooth.Device
+
+	// load model early
+	//
+	// if failed, report error and continue
+	err = loadModel(modelPath, labelPath)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	modelLoaded = true
 
 	// enable wifi via bluetooth command
 	//
@@ -159,7 +170,7 @@ func main() {
 
 	jobChan := make(chan Picture, 100)
 	wg.Add(1)
-	go worker(jobChan, hostname, signalUser, signalRecipient, modelPath, labelPath, limits)
+	go worker(jobChan, hostname, signalUser, signalRecipient, limits)
 
 	for i := 0; i < len(files); i++ {
 		tmpFile, err := download(files[i], hostname)
@@ -172,7 +183,7 @@ func main() {
 		jobChan <- Picture{files[i], tmpFile, timestamps[i]}
 
 		// save a copy of the file
-		if *savejpg && filepath.Ext(files[i]) == ".JPG" {
+		if *savejpg && (strings.EqualFold(filepath.Ext(files[i]), ".JPG") || strings.EqualFold(filepath.Ext(files[i]), ".JPEG")) {
 			source, err := os.Open(tmpFile)
 			if err != nil {
 				log.Println("Unable to open " + files[i] + " for copy - " + err.Error())
@@ -212,26 +223,39 @@ func main() {
 }
 
 // process work in a queue
-func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, modelPath *string, labelPath *string, limits *int) {
+func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, limits *int) {
 	defer wg.Done()
 	for picture := range jobChan {
 
-		outputfileName, description, err := objectDetect(&picture.tmpFilename, modelPath, labelPath, limits)
-		if err != nil {
-			log.Println(err.Error())
-			err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
-			os.Remove(picture.tmpFilename)
+		if modelLoaded {
+			outputfileName, description, err := objectDetect(&picture.tmpFilename, limits)
+			if err != nil {
+				log.Println(err.Error())
+				err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
+				os.Remove(picture.tmpFilename)
+			} else {
+				if len(*description) > 0 {
+					err = alert(signalUser, signalRecipient, picture.timeStamp+" description: "+*description, picture.tmpFilename+" "+*outputfileName)
+				} else {
+					err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
+				}
+				os.Remove(picture.tmpFilename)
+				os.Remove(*outputfileName)
+			}
+			if err != nil {
+				log.Println(err.Error())
+			} else {
+				// all good, can now delete on camera
+				//
+				err = delete(picture.fileName, hostname)
+				if err != nil {
+					log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+				}
+			}
 		} else {
-			err = alert(signalUser, signalRecipient, picture.timeStamp+" "+*description, picture.tmpFilename+" "+*outputfileName)
-			os.Remove(picture.tmpFilename)
-			os.Remove(*outputfileName)
-		}
-		if err != nil {
-			log.Println(err.Error())
-		} else {
-			// all good, can now delete on camera
+			// no object detection
 			//
-			err = delete(picture.fileName, hostname)
+			err := delete(picture.fileName, hostname)
 			if err != nil {
 				log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
 			}
@@ -535,8 +559,6 @@ func listFiles(hostname string) ([]string, []string, error) {
 		if err != nil {
 			return nil, nil, errors.New("unable to get camera index page - " + err.Error())
 		}
-
-		// log.Println(string(body[:]))
 
 		// parse xml into new slice
 		//
