@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
 	"io/ioutil"
@@ -262,10 +263,10 @@ func objectDetect(inputVideo *string, limits *int) (*string, *string, error) {
 				int(float32(size[0])*class.loc[2]),
 			), c, 6)
 			text := fmt.Sprintf("%s: %.1f%%", strings.Replace(label, "_", " ", -1), class.score*100)
-			gocv.PutText(&result.mat, text, image.Pt(
-				int(float32(size[1])*class.loc[1]),
-				int(float32(size[0])*class.loc[0])+70,
-			), gocv.FontHersheySimplex, 2.0, c, 2)
+			textlocation := image.Pt(int(float32(size[1])*class.loc[1]), int(float32(size[0])*class.loc[0])+70)
+			textsize := gocv.GetTextSize(text, gocv.FontHersheySimplex, 2.0, 2)
+			gocv.Rectangle(&result.mat, image.Rect(textlocation.X, textlocation.Y, textlocation.X+textsize.X, textlocation.Y-textsize.Y), color.RGBA{255, 255, 255, 0}, -1)
+			gocv.PutText(&result.mat, text, textlocation, gocv.FontHersheySimplex, 2.0, c, 2)
 
 			_, exists := objects[label]
 			if exists {
