@@ -19,10 +19,15 @@ import (
 	"sync"
 
 	"github.com/mattn/go-tflite"
+	"github.com/plord12/trailcameradownload/xnnpackbuiltin"
 	"gocv.io/x/gocv"
 
 	"golang.org/x/image/colornames"
 )
+
+var labels []string = nil
+var model *tflite.Model = nil
+var enableXnnpack bool = false
 
 type ssdResult struct {
 	loc   []float32
@@ -61,11 +66,34 @@ func copySlice(f []float32) []float32 {
 	return ff
 }
 
-func detect(ctx context.Context, wg *sync.WaitGroup, resultChan chan<- *ssdResult, wanted_width, wanted_height, wanted_channels int, cam *gocv.VideoCapture) {
+func detect(ctx context.Context, wg *sync.WaitGroup, resultChan chan<- *ssdResult, cam *gocv.VideoCapture) {
 	defer wg.Done()
 	defer close(resultChan)
 
+	options := tflite.NewInterpreterOptions()
+	if enableXnnpack {
+		options.AddDelegate(xnnpackbuiltin.New(xnnpackbuiltin.DelegateOptions{NumThreads: 2}))
+	} else {
+		options.SetNumThread(4)
+	}
+	defer options.Delete()
+
+	interpreter := tflite.NewInterpreter(model, options)
+	if interpreter == nil {
+		log.Printf("cannot create interpreter")
+		return
+	}
+	defer interpreter.Delete()
+
+	status := interpreter.AllocateTensors()
+	if status != tflite.OK {
+		log.Printf("allocate failed")
+		return
+	}
 	input := interpreter.GetInputTensor(0)
+	wanted_height := input.Dim(1)
+	wanted_width := input.Dim(2)
+
 	qp := input.QuantizationParams()
 	if qp.Scale == 0 {
 		qp.Scale = 1
@@ -107,7 +135,7 @@ func detect(ctx context.Context, wg *sync.WaitGroup, resultChan chan<- *ssdResul
 		resized.Close()
 		status := interpreter.Invoke()
 		if status != tflite.OK {
-			log.Println("invoke failed")
+			log.Printf("invoke failed " + status.String())
 			return
 		}
 
@@ -132,10 +160,7 @@ func detect(ctx context.Context, wg *sync.WaitGroup, resultChan chan<- *ssdResul
 	}
 }
 
-var labels []string = nil
-var interpreter *tflite.Interpreter = nil
-
-func loadModel(modelPath *string, labelPath *string) error {
+func loadModel(modelPath *string, labelPath *string, xnnpack *bool) error {
 
 	var err error
 
@@ -144,24 +169,12 @@ func loadModel(modelPath *string, labelPath *string) error {
 		return err
 	}
 
-	model := tflite.NewModelFromFile(*modelPath)
+	model = tflite.NewModelFromFile(*modelPath)
 	if model == nil {
 		return errors.New("cannot load model")
 	}
 
-	options := tflite.NewInterpreterOptions()
-	options.SetNumThread(4)
-
-	interpreter = tflite.NewInterpreter(model, options)
-	if interpreter == nil {
-		return errors.New("cannot create interpreter")
-	}
-
-	status := interpreter.AllocateTensors()
-	if status != tflite.OK {
-		log.Println("allocate failed")
-		return errors.New("allocate failed")
-	}
+	enableXnnpack = *xnnpack
 
 	log.Printf("Loaded model " + *modelPath + " with " + *labelPath)
 
@@ -170,7 +183,7 @@ func loadModel(modelPath *string, labelPath *string) error {
 
 func objectDetect(inputVideo *string, limits *int) (*string, *string, error) {
 
-	if labels == nil || interpreter == nil {
+	if labels == nil || model == nil {
 		return nil, nil, nil
 	}
 
@@ -200,17 +213,17 @@ func objectDetect(inputVideo *string, limits *int) (*string, *string, error) {
 	}
 	defer vw.Close()
 
-	input := interpreter.GetInputTensor(0)
-	wanted_height := input.Dim(1)
-	wanted_width := input.Dim(2)
-	wanted_channels := input.Dim(3)
+	// scale annotations depending on frame width
+	rectangleWidth := int(4 * (cam.Get(gocv.VideoCaptureFrameWidth) / 1920))
+	fontScale := 1.2 * (cam.Get(gocv.VideoCaptureFrameWidth) / 1920)
+	fontThickness := int(2 * (cam.Get(gocv.VideoCaptureFrameWidth) / 1920))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	// Start up the background capture
 	resultChan := make(chan *ssdResult, 2)
-	go detect(ctx, &wg, resultChan, wanted_width, wanted_height, wanted_channels, cam)
+	go detect(ctx, &wg, resultChan, cam)
 
 	sc := make(chan os.Signal, 1)
 	defer close(sc)
@@ -261,12 +274,12 @@ func objectDetect(inputVideo *string, limits *int) (*string, *string, error) {
 				int(float32(size[0])*class.loc[0]),
 				int(float32(size[1])*class.loc[3]),
 				int(float32(size[0])*class.loc[2]),
-			), c, 6)
+			), c, rectangleWidth)
 			text := fmt.Sprintf("%s: %.1f%%", strings.Replace(label, "_", " ", -1), class.score*100)
-			textlocation := image.Pt(int(float32(size[1])*class.loc[1]), int(float32(size[0])*class.loc[0])+70)
-			textsize := gocv.GetTextSize(text, gocv.FontHersheySimplex, 2.0, 2)
-			gocv.Rectangle(&result.mat, image.Rect(textlocation.X, textlocation.Y, textlocation.X+textsize.X, textlocation.Y-textsize.Y), color.RGBA{255, 255, 255, 0}, -1)
-			gocv.PutText(&result.mat, text, textlocation, gocv.FontHersheySimplex, 2.0, c, 2)
+			textlocation := image.Pt(int(float32(size[1])*class.loc[1]), int(float32(size[0])*class.loc[0]))
+			textsize := gocv.GetTextSize(text, gocv.FontHersheySimplex, fontScale, fontThickness)
+			gocv.Rectangle(&result.mat, image.Rect(textlocation.X, textlocation.Y, textlocation.X+textsize.X, textlocation.Y-textsize.Y), color.RGBA{0, 0, 0, 0}, -1)
+			gocv.PutText(&result.mat, text, textlocation, gocv.FontHersheySimplex, fontScale, color.RGBA{255, 255, 255, 0}, fontThickness)
 
 			_, exists := objects[label]
 			if exists {

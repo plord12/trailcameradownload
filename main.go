@@ -12,11 +12,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	_ "net/http/pprof"
 
 	"github.com/Wifx/gonetworkmanager"
 	"tinygo.org/x/bluetooth"
@@ -48,8 +52,23 @@ func main() {
 	labelPath := flag.String("label", "labelmap.txt", "path to label file")
 	limits := flag.Int("limits", 5, "limits of items")
 	savejpg := flag.Bool("savejpg", false, "save jpg files to $HOME/photos")
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
+	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
+	xnnpack := flag.Bool("xnnpack", false, "use XNNPACK delegate")
 
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	var err error
 	var bluetoothDevice *bluetooth.Device
@@ -57,7 +76,7 @@ func main() {
 	// load model early
 	//
 	// if failed, report error and continue
-	err = loadModel(modelPath, labelPath)
+	err = loadModel(modelPath, labelPath, xnnpack)
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -220,6 +239,17 @@ func main() {
 	//
 	disconnectWifi(nm, activeConnection)
 
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		runtime.GC()    // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+	}
 }
 
 // process work in a queue
