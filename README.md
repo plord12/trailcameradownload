@@ -12,7 +12,7 @@ I chose an [odroid c4](https://ameridroid.com/products/odroid-c4) with [dual wif
 * Set time & date
 * Check battery level
 * Download files
-* Attempt aminal recognition with tensorflow
+* Attempt animal recognition with tensorflow
 * Send images to signal user
 * Delete files on camera
 * Optionally save jpeg images (for futher tensorflow training)
@@ -60,7 +60,7 @@ Usage of ./trailcameradownload-linux-arm64:
   -ssid string
     	WiFi SSID (default "CEYOMUR-.*")
   -undeletedfiles
-    	maintain list of undeleted files in $HOME/.undeleted-[Bluetooth UUID]
+    	maintain list of undeleted files in $HOME/.undeleted-[Bluetooth address]
   -xnnpack
     	use XNNPACK delegate
 ```
