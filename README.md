@@ -5,6 +5,20 @@ attempt to identifiy animals and send to signal accounts.
 
 I chose an [odroid c4](https://ameridroid.com/products/odroid-c4) with [dual wifi/bluetooth usb adapter](https://thepihut.com/products/combination-wifi-bluetooth-4-0-usb-adapter).
 
+## Features
+
+* Send Bluetooth message to enable WiFi ( with re-tries)
+* Connect to WiFi hotspot ( with re-tries)
+* Set time & date
+* Check battery level
+* Download files
+* Attempt aminal recognition with tensorflow
+* Send images to signal user
+* Delete files on camera
+* Optionally save jpeg images (for futher tensorflow training)
+* Optionally save list of failed image deletions (for later re-try attempt) .. can happen on low power
+
+
 ## OS setup
 
 * Setup as per odroid intructions - I used armbian
@@ -16,19 +30,23 @@ I chose an [odroid c4](https://ameridroid.com/products/odroid-c4) with [dual wif
 
 See https://github.com/plord12/vizy-training for an attempt to train a tensorflow lite model.
 
+
 ## Usage
 
 ```
-$ ./trailcameradownload-linux-arm64 --help
 Usage of ./trailcameradownload-linux-arm64:
   -address string
     	Bluetooth address (default "D6:30:35:.*")
   -characteristic string
     	Bluetooth characteristic UUID (default "0000ffe9-0000-1000-8000-00805f9b34fb")
+  -cpuprofile file
+    	write cpu profile to file
   -label string
     	path to label file (default "labelmap.txt")
   -limits int
     	limits of items (default 5)
+  -memprofile file
+    	write memory profile to file
   -model string
     	path to model file (default "detect.tflite")
   -password string
@@ -41,6 +59,10 @@ Usage of ./trailcameradownload-linux-arm64:
     	Signal messenger username
   -ssid string
     	WiFi SSID (default "CEYOMUR-.*")
+  -undeletedfiles
+    	maintain list of undeleted files in $HOME/.undeleted-[Bluetooth UUID]
+  -xnnpack
+    	use XNNPACK delegate
 ```
 
 ## Running

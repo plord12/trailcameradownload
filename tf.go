@@ -80,14 +80,14 @@ func detect(ctx context.Context, wg *sync.WaitGroup, resultChan chan<- *ssdResul
 
 	interpreter := tflite.NewInterpreter(model, options)
 	if interpreter == nil {
-		log.Printf("cannot create interpreter")
+		log.Printf("cannot create interpreter\n")
 		return
 	}
 	defer interpreter.Delete()
 
 	status := interpreter.AllocateTensors()
 	if status != tflite.OK {
-		log.Printf("allocate failed")
+		log.Printf("allocate failed\n")
 		return
 	}
 	input := interpreter.GetInputTensor(0)
@@ -135,7 +135,7 @@ func detect(ctx context.Context, wg *sync.WaitGroup, resultChan chan<- *ssdResul
 		resized.Close()
 		status := interpreter.Invoke()
 		if status != tflite.OK {
-			log.Printf("invoke failed " + status.String())
+			log.Printf("invoke failed %s\n", status.String())
 			return
 		}
 
@@ -176,7 +176,7 @@ func loadModel(modelPath *string, labelPath *string, xnnpack *bool) error {
 
 	enableXnnpack = *xnnpack
 
-	log.Printf("Loaded model " + *modelPath + " with " + *labelPath)
+	log.Printf("Loaded model %s with %s\n", *modelPath, *labelPath)
 
 	return nil
 }

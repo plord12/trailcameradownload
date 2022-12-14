@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"encoding/xml"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -55,23 +57,26 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
 	xnnpack := flag.Bool("xnnpack", false, "use XNNPACK delegate")
+	undeletedfiles := flag.Bool("undeletedfiles", false,
+		"maintain list of undeleted files in $HOME/.undeleted-[Bluetooth address]")
 
 	flag.Parse()
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
+			log.Fatalf("could not create CPU profile: %s", err.Error())
 		}
 		defer f.Close() // error handling omitted for example
 		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
+			log.Fatalf("could not start CPU profile: %s", err.Error())
 		}
 		defer pprof.StopCPUProfile()
 	}
 
 	var err error
 	var bluetoothDevice *bluetooth.Device
+	var bluetoothAdress string
 
 	// load model early
 	//
@@ -85,9 +90,9 @@ func main() {
 	// enable wifi via bluetooth command
 	//
 	for attempt := 1; attempt < 10; attempt++ {
-		bluetoothDevice, err = connectBluetooth(address)
+		bluetoothDevice, bluetoothAdress, err = connectBluetooth(address)
 		if err != nil {
-			log.Println("Bluetooth connect failed [" + strconv.Itoa(attempt) + " of 10] - " + string(err.Error()))
+			log.Printf("Bluetooth connect failed [%d of 10] - %s\n", attempt, string(err.Error()))
 			if bluetoothDevice != nil {
 				disableBluetooth(bluetoothDevice, uuid)
 			}
@@ -102,12 +107,14 @@ func main() {
 		if bluetoothDevice != nil {
 			disableBluetooth(bluetoothDevice, uuid)
 		}
-		log.Panicf(err.Error())
+		log.Println(err.Error())
+		alert(signalUser, signalRecipient, "Camera: unable to connect via bluetooth", "")
+		os.Exit(1)
 	}
 	for attempt := 1; attempt < 10; attempt++ {
 		err = enableWifi(bluetoothDevice, uuid)
 		if err != nil {
-			log.Println("Enable WiFi failed [" + strconv.Itoa(attempt) + " of 10] - " + string(err.Error()))
+			log.Printf("Enable WiFi failed [%d of 10] - %s\n", attempt, string(err.Error()))
 		} else {
 			break
 		}
@@ -115,7 +122,9 @@ func main() {
 	}
 	if err != nil {
 		disableBluetooth(bluetoothDevice, uuid)
-		log.Panicf(err.Error())
+		log.Println(err.Error())
+		alert(signalUser, signalRecipient, "Camera: unable to connect via WiFi", "")
+		os.Exit(1)
 	}
 
 	// connect to wifi - loop and wait
@@ -127,7 +136,7 @@ func main() {
 	for attempt := 1; attempt < 10; attempt++ {
 		nm, activeConnection, hostname, err = connectWifi(ssid, password)
 		if err != nil {
-			log.Println("WiFi connect failed [" + strconv.Itoa(attempt) + " of 10] - " + string(err.Error()))
+			log.Printf("WiFi connect failed [%d of 10] - %s", attempt, string(err.Error()))
 			if activeConnection != nil {
 				disableBluetooth(bluetoothDevice, uuid)
 				disconnectWifi(nm, activeConnection)
@@ -172,8 +181,30 @@ func main() {
 	// get camera status
 	//
 	battery, _ := status(hostname)
-	if battery <= 20 {
-		alert(signalUser, signalRecipient, "Warning: battery low at "+strconv.Itoa(battery)+"%", "")
+
+	var undeletedPath string = ""
+
+	// delete any old pictures first
+	//
+	if *undeletedfiles {
+		undeletedPath = os.Getenv("HOME") + "/.undeleted-" + bluetoothAdress
+		if _, err := os.Stat(undeletedPath); err == nil {
+			file, err := os.Open(undeletedPath)
+			if err != nil {
+				log.Printf("Unable to open undeleted file - %s\n", err.Error())
+			} else {
+				defer file.Close()
+				scanner := bufio.NewScanner(file)
+				for scanner.Scan() {
+					delete(scanner.Text(), hostname)
+				}
+				if err := scanner.Err(); err != nil {
+					log.Printf("Unable to read undeleted file - %s\n", err.Error())
+				}
+				file.Close()
+			}
+			os.Remove(undeletedPath)
+		}
 	}
 
 	// download any new pictures
@@ -184,17 +215,30 @@ func main() {
 			disableBluetooth(bluetoothDevice, uuid)
 			disconnectWifi(nm, activeConnection)
 		}
-		log.Panicf(err.Error())
+		log.Println(err.Error())
+		alert(signalUser, signalRecipient, "Camera: unable to download files", "")
+		os.Exit(1)
 	}
 
-	jobChan := make(chan Picture, 100)
+	if battery <= 20 {
+		alert(signalUser, signalRecipient,
+			"Camera: battery low at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
+	} else if battery > 100 {
+		alert(signalUser, signalRecipient,
+			"Camera: battery charging, "+strconv.Itoa(len(files))+" files to download", "")
+	} else {
+		alert(signalUser, signalRecipient,
+			"Camera: battery at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
+	}
+
+	jobChan := make(chan Picture, len(files))
 	wg.Add(1)
-	go worker(jobChan, hostname, signalUser, signalRecipient, limits)
+	go worker(jobChan, hostname, signalUser, signalRecipient, limits, undeletedPath, len(files))
 
 	for i := 0; i < len(files); i++ {
 		tmpFile, err := download(files[i], hostname)
 		if err != nil {
-			log.Println("Failed to download " + files[i] + " - " + err.Error())
+			log.Printf("Failed to download %s - %s\n", files[i], err.Error())
 			os.Remove(tmpFile)
 			break
 		}
@@ -205,18 +249,18 @@ func main() {
 		if *savejpg && (strings.EqualFold(filepath.Ext(files[i]), ".JPG") || strings.EqualFold(filepath.Ext(files[i]), ".JPEG")) {
 			source, err := os.Open(tmpFile)
 			if err != nil {
-				log.Println("Unable to open " + files[i] + " for copy - " + err.Error())
+				log.Printf("Unable to open %s for copy - %s\n", files[i], err.Error())
 				break
 			}
 			defer source.Close()
 			destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", strings.Replace(strings.Replace(timestamps[i]+".*.jpg", "/", "_", -1), " ", "_", -1))
 			if err != nil {
-				log.Println("Unable to open " + os.Getenv("HOME") + "/photos/" + timestamps[i] + ".*.jpg" + " for copy - " + err.Error())
+				log.Printf("Unable to open %s for copy - %s\n", os.Getenv("HOME")+"/photos/"+timestamps[i]+".*.jpg", err.Error())
 				break
 			}
 			_, err = io.Copy(destination, source)
 			if err != nil {
-				log.Println("Unable to copy " + files[i] + " - " + err.Error())
+				log.Printf("Unable to copy %s - %s\n", files[i], err.Error())
 				break
 			}
 			defer destination.Close()
@@ -242,19 +286,34 @@ func main() {
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
 		if err != nil {
-			log.Fatal("could not create memory profile: ", err)
+			log.Fatalf("could not create memory profile: %s\n", err)
 		}
 		defer f.Close() // error handling omitted for example
 		runtime.GC()    // get up-to-date statistics
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Fatal("could not write memory profile: ", err)
+			log.Fatalf("could not write memory profile: %s\n", err)
 		}
 	}
 }
 
 // process work in a queue
-func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, limits *int) {
+func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, limits *int, undeletedPath string, maxFiles int) {
 	defer wg.Done()
+
+	var undeletedFile *os.File = nil
+	var err error
+	var fileCount int = 1
+
+	if len(undeletedPath) > 0 {
+		undeletedFile, err = os.OpenFile(undeletedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Printf("Unable to open undeleted file - %s\n", err.Error())
+			undeletedFile = nil
+		} else {
+			defer undeletedFile.Close()
+		}
+	}
+
 	for picture := range jobChan {
 
 		if modelLoaded {
@@ -265,9 +324,11 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 				os.Remove(picture.tmpFilename)
 			} else {
 				if len(*description) > 0 {
-					err = alert(signalUser, signalRecipient, picture.timeStamp+" description: "+*description, picture.tmpFilename+" "+*outputfileName)
+					message := fmt.Sprintf("[%d of %d] %s description: %s", fileCount, maxFiles, picture.timeStamp, *description)
+					err = alert(signalUser, signalRecipient, message, picture.tmpFilename+" "+*outputfileName)
 				} else {
-					err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
+					message := fmt.Sprintf("[%d of %d] %s", fileCount, maxFiles, picture.timeStamp)
+					err = alert(signalUser, signalRecipient, message, picture.tmpFilename)
 				}
 				os.Remove(picture.tmpFilename)
 				os.Remove(*outputfileName)
@@ -280,16 +341,37 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 				err = delete(picture.fileName, hostname)
 				if err != nil {
 					log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+					if undeletedFile != nil {
+						if _, err := undeletedFile.WriteString(picture.fileName + "\n"); err != nil {
+							log.Println("Unable to write to undeleted file - ", err.Error())
+						}
+						undeletedFile.Sync()
+					}
 				}
 			}
 		} else {
 			// no object detection
 			//
-			err := delete(picture.fileName, hostname)
+			message := fmt.Sprintf("[%d of %d] %s", fileCount, maxFiles, picture.timeStamp)
+			err = alert(signalUser, signalRecipient, message, picture.tmpFilename)
+			os.Remove(picture.tmpFilename)
 			if err != nil {
-				log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+				log.Println(err.Error())
+			} else {
+				err := delete(picture.fileName, hostname)
+				if err != nil {
+					log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+					if undeletedFile != nil {
+						if _, err := undeletedFile.WriteString(picture.fileName + "\n"); err != nil {
+							log.Println("Unable to write to undeleted file - ", err.Error())
+						}
+						undeletedFile.Sync()
+					}
+				}
 			}
 		}
+
+		fileCount = fileCount + 1
 	}
 }
 
@@ -318,7 +400,7 @@ func alert(signalUser *string, signalRecipient *string, message string, attachme
 			args = append(args, "-a")
 			args = append(args, strings.Split(attachments, " ")...)
 		}
-		log.Println("signal-cli", args)
+		log.Printf("signal-cli %v\n", args)
 		cmd = exec.Command("signal-cli", args...)
 
 		stdout, err = cmd.CombinedOutput()
@@ -331,23 +413,23 @@ func alert(signalUser *string, signalRecipient *string, message string, attachme
 }
 
 // Enable and connect to bluetooth device
-func connectBluetooth(address *string) (*bluetooth.Device, error) {
+func connectBluetooth(address *string) (*bluetooth.Device, string, error) {
 
 	// Enable bluetooth
 	//
 	log.Println("Enabling bluetooth")
 	err := adapter.Enable()
 	if err != nil {
-		return nil, errors.New("failed to enable bluetooth - " + err.Error())
+		return nil, "", errors.New("failed to enable bluetooth - " + err.Error())
 	}
 
 	ch := make(chan bluetooth.ScanResult, 1)
 
 	// Start scanning
 	//
-	log.Println("Scanning bluetooth for " + *address)
+	log.Printf("Scanning bluetooth for %s\n", *address)
 	err = adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-		log.Println("Found bluetooth device:", result.Address.String(), result.LocalName())
+		log.Printf("Found bluetooth device: %s %s\n", result.Address.String(), result.LocalName())
 		match, _ := regexp.MatchString(*address, result.Address.String())
 		if match {
 			adapter.StopScan()
@@ -355,7 +437,7 @@ func connectBluetooth(address *string) (*bluetooth.Device, error) {
 		}
 	})
 	if err != nil {
-		return nil, errors.New("failed to complete bluetooth scan - " + err.Error())
+		return nil, "", errors.New("failed to complete bluetooth scan - " + err.Error())
 	}
 
 	// Connect
@@ -370,12 +452,12 @@ func connectBluetooth(address *string) (*bluetooth.Device, error) {
 			}
 		}
 		if err != nil {
-			return nil, errors.New("failed to connect to bluetooth device - " + err.Error())
+			return nil, "", errors.New("failed to connect to bluetooth device - " + err.Error())
 		}
-		log.Println("Connected to ", result.Address.String())
+		log.Printf("Connected to %s\n", result.Address.String())
+		return device, result.Address.String(), nil
 	}
 
-	return device, nil
 }
 
 // enable wifi by sending bluetooth command
@@ -448,7 +530,7 @@ func disableBluetooth(device *bluetooth.Device, uuid *string) error {
 // connect to wifi
 func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManager, gonetworkmanager.ActiveConnection, string, error) {
 
-	log.Println("Looking for WiFi SSID " + *ssid)
+	log.Printf("Looking for WiFi SSID %s\n", *ssid)
 
 	// Create new instance of gonetworkmanager
 	//
@@ -514,7 +596,7 @@ func connectWifi(ssid *string, password *string) (gonetworkmanager.NetworkManage
 							if err != nil {
 								return nm, nil, "", errors.New("unable to get camera IP address - " + err.Error())
 							}
-							log.Println("Connected to WiFi SSID " + name)
+							log.Printf("Connected to WiFi SSID %s\n", name)
 							return nm, activeConnection, cameraIP, nil
 						} else {
 							time.Sleep(time.Millisecond * 250)
@@ -617,7 +699,7 @@ func listFiles(hostname string) ([]string, []string, error) {
 		sortedTimestamps = append(sortedTimestamps, file.Time)
 	}
 
-	log.Println(strconv.Itoa(len(sortedFiles)) + " files on camera")
+	log.Printf("%d files on camera\n", len(sortedFiles))
 
 	return sortedFiles, sortedTimestamps, nil
 }
@@ -627,7 +709,7 @@ func download(file string, hostname string) (string, error) {
 
 	url := "http://" + hostname + strings.ReplaceAll(file, "\\", "/")[2:]
 
-	log.Println("Downloading " + url)
+	log.Printf("Downloading %s\n", url)
 
 	tmpFile, err := ioutil.TempFile("", "image.*"+filepath.Ext(file))
 	if err != nil {
@@ -656,7 +738,7 @@ func delete(file string, hostname string) error {
 	if err != nil {
 		return errors.New("unable to delete file - " + err.Error())
 	}
-	log.Println("Deleted " + file)
+	log.Printf("Deleted %s\n", file)
 
 	return nil
 }
@@ -679,23 +761,23 @@ func status(hostname string) (int, error) {
 	date := currentTime.Format("2006-01-02")
 	_, err := http.Get("http://" + hostname + "/?custom=1&cmd=3005&str=" + date)
 	if err != nil {
-		log.Println("Unable to set date to " + date + " - " + err.Error())
+		log.Printf("Unable to set date to %s - %s\n", date, err.Error())
 	} else {
-		log.Println("Date set to " + date)
+		log.Printf("Date set to %s\n", date)
 	}
 	time := currentTime.Format("15:04:05")
 	_, err = http.Get("http://" + hostname + "/?custom=1&cmd=3006&str=" + time)
 	if err != nil {
-		log.Println("Unable to set time to " + time + " - " + err.Error())
+		log.Printf("Unable to set time to %s - %s\n", time, err.Error())
 	} else {
-		log.Println("Time set to " + time)
+		log.Printf("Time set to %s\n", time)
 	}
 
 	// battery level (?)
 	//
 	resp, err := http.Get("http://" + hostname + "/?custom=1&cmd=3019")
 	if err != nil {
-		log.Println("Unable to get 3019 - " + err.Error())
+		log.Printf("Unable to get 3019 - %s\n", err.Error())
 	} else {
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
@@ -703,10 +785,10 @@ func status(hostname string) (int, error) {
 			var function Function
 			err = xml.Unmarshal(body, &function)
 			if err != nil {
-				log.Println("unable to parse 3019 xml - " + err.Error())
+				log.Printf("unable to parse 3019 xml - %s\n", err.Error())
 			} else {
 				battery, _ = strconv.Atoi(function.Value)
-				log.Println("Battery at " + function.Value + "%")
+				log.Printf("Battery at %s%%\n", function.Value)
 			}
 		}
 	}
