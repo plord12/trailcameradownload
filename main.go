@@ -59,6 +59,7 @@ func main() {
 	xnnpack := flag.Bool("xnnpack", false, "use XNNPACK delegate")
 	undeletedfiles := flag.Bool("undeletedfiles", false,
 		"maintain list of undeleted files in $HOME/.undeleted-[Bluetooth address]")
+	testfiles := flag.String("testfiles", "", "list of testfiles - disables connecting to camera")
 
 	flag.Parse()
 
@@ -86,6 +87,30 @@ func main() {
 		log.Println(err.Error())
 	}
 	modelLoaded = true
+
+	if len(*testfiles) > 0 {
+		for _, picture := range strings.Split(*testfiles, ",") {
+			outputfileName, description, err := objectDetect(&picture, limits, true)
+			if err == nil {
+				destinationFile := strings.TrimSuffix(picture, filepath.Ext(picture)) + "-out" + filepath.Ext(picture)
+				input, err := ioutil.ReadFile(*outputfileName)
+				if err != nil {
+					log.Printf("Read processed file failed - %s\n", err.Error())
+				} else {
+					err = ioutil.WriteFile(destinationFile, input, 0644)
+					if err != nil {
+						log.Printf("Write processed file failed - %s\n", err.Error())
+					} else {
+						log.Printf("%s -> %s, %s\n", picture, destinationFile, *description)
+					}
+				}
+			} else {
+				log.Printf("Detection failed - %s\n", err.Error())
+			}
+			os.Remove(*outputfileName)
+		}
+		return
+	}
 
 	// enable wifi via bluetooth command
 	//
@@ -317,7 +342,7 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 	for picture := range jobChan {
 
 		if modelLoaded {
-			outputfileName, description, err := objectDetect(&picture.tmpFilename, limits)
+			outputfileName, description, err := objectDetect(&picture.tmpFilename, limits, false)
 			if err != nil {
 				log.Println(err.Error())
 				err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
@@ -386,6 +411,7 @@ func alert(signalUser *string, signalRecipient *string, message string, attachme
 		if err != nil {
 			return errors.New("signal-cli failed - " + string(stdout))
 		}
+		//log.Println(string(stdout[:]))
 
 		var args []string
 		args = append(args, "-u")

@@ -181,7 +181,7 @@ func loadModel(modelPath *string, labelPath *string, xnnpack *bool) error {
 	return nil
 }
 
-func objectDetect(inputVideo *string, limits *int) (*string, *string, error) {
+func objectDetect(inputVideo *string, limits *int, testmode bool) (*string, *string, error) {
 
 	if labels == nil || model == nil {
 		return nil, nil, nil
@@ -243,11 +243,17 @@ func objectDetect(inputVideo *string, limits *int) (*string, *string, error) {
 			break
 		}
 
+		if testmode {
+			log.Printf("TESTMODE: Processing %s %d\n", *inputVideo, frames)
+		}
 		classes := make([]ssdClass, 0, len(result.clazz))
 		for i := 0; i < len(result.clazz); i++ {
 			idx := int(result.clazz[i]) // was +1
 			if idx < 0 {
 				continue
+			}
+			if testmode {
+				log.Printf("TESTMODE: Found label %d (%s) at %v with score %f\n", idx, labels[idx], result.loc[i*4:(i+1)*4], result.score[i])
 			}
 			score := float64(result.score[i])
 			if score < 0.6 {

@@ -10,8 +10,11 @@ Eurasian_Magpie
 Long-tailed_Tit
 Red_Kite
 Grey_Heron
+Blackcap
+Redwing
 Common_Hedgehog
 Red_Fox
 Eastern_Gray_Squirrel
 Domestic_Cat
+person
 Common_Dandelion
