@@ -12,9 +12,10 @@ Red_Kite
 Grey_Heron
 Blackcap
 Redwing
+Eurasian_Green_Woodpecker
 Common_Hedgehog
 Red_Fox
 Eastern_Gray_Squirrel
 Domestic_Cat
-person
+Person
 Common_Dandelion
