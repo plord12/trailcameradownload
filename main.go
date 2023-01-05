@@ -49,6 +49,7 @@ func main() {
 	ssid := flag.String("ssid", "CEYOMUR-.*", "WiFi SSID")
 	password := flag.String("password", "12345678", "WiFi password")
 	signalUser := flag.String("signaluser", "", "Signal messenger username")
+	signalGroup := flag.String("signalgroup", "", "Signal messenger group id")
 	signalRecipient := flag.String("signalrecipient", "", "Signal messenger recipient - quote for multiple users")
 	modelPath := flag.String("model", "detect.tflite", "path to model file")
 	labelPath := flag.String("label", "labelmap.txt", "path to label file")
@@ -133,7 +134,7 @@ func main() {
 			disableBluetooth(bluetoothDevice, uuid)
 		}
 		log.Println(err.Error())
-		alert(signalUser, signalRecipient, "Camera: unable to connect via bluetooth", "")
+		alert(signalUser, signalRecipient, signalGroup, "Camera: unable to connect via bluetooth", "")
 		os.Exit(1)
 	}
 	for attempt := 1; attempt < 10; attempt++ {
@@ -148,7 +149,7 @@ func main() {
 	if err != nil {
 		disableBluetooth(bluetoothDevice, uuid)
 		log.Println(err.Error())
-		alert(signalUser, signalRecipient, "Camera: unable to connect via WiFi", "")
+		alert(signalUser, signalRecipient, signalGroup, "Camera: unable to connect via WiFi", "")
 		os.Exit(1)
 	}
 
@@ -241,24 +242,24 @@ func main() {
 			disconnectWifi(nm, activeConnection)
 		}
 		log.Println(err.Error())
-		alert(signalUser, signalRecipient, "Camera: unable to download files", "")
+		alert(signalUser, signalRecipient, signalGroup, "Camera: unable to download files", "")
 		os.Exit(1)
 	}
 
 	if battery <= 20 {
-		alert(signalUser, signalRecipient,
+		alert(signalUser, signalRecipient, signalGroup,
 			"Camera: battery low at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
 	} else if battery > 100 {
-		alert(signalUser, signalRecipient,
+		alert(signalUser, signalRecipient, signalGroup,
 			"Camera: battery charging, "+strconv.Itoa(len(files))+" files to download", "")
 	} else {
-		alert(signalUser, signalRecipient,
+		alert(signalUser, signalRecipient, signalGroup,
 			"Camera: battery at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
 	}
 
 	jobChan := make(chan Picture, len(files))
 	wg.Add(1)
-	go worker(jobChan, hostname, signalUser, signalRecipient, limits, undeletedPath, len(files))
+	go worker(jobChan, hostname, signalUser, signalRecipient, signalGroup, limits, undeletedPath, len(files))
 
 	for i := 0; i < len(files); i++ {
 		tmpFile, err := download(files[i], hostname)
@@ -322,7 +323,7 @@ func main() {
 }
 
 // process work in a queue
-func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, limits *int, undeletedPath string, maxFiles int) {
+func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalGroup *string, signalRecipient *string, limits *int, undeletedPath string, maxFiles int) {
 	defer wg.Done()
 
 	var undeletedFile *os.File = nil
@@ -345,15 +346,15 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 			outputfileName, description, err := objectDetect(&picture.tmpFilename, limits, false)
 			if err != nil {
 				log.Println(err.Error())
-				err = alert(signalUser, signalRecipient, picture.timeStamp, picture.tmpFilename)
+				err = alert(signalUser, signalRecipient, signalGroup, picture.timeStamp, picture.tmpFilename)
 				os.Remove(picture.tmpFilename)
 			} else {
 				if len(*description) > 0 {
 					message := fmt.Sprintf("[%d of %d] %s description: %s", fileCount, maxFiles, picture.timeStamp, *description)
-					err = alert(signalUser, signalRecipient, message, picture.tmpFilename+" "+*outputfileName)
+					err = alert(signalUser, signalRecipient, signalGroup, message, picture.tmpFilename+" "+*outputfileName)
 				} else {
 					message := fmt.Sprintf("[%d of %d] %s", fileCount, maxFiles, picture.timeStamp)
-					err = alert(signalUser, signalRecipient, message, picture.tmpFilename)
+					err = alert(signalUser, signalRecipient, signalGroup, message, picture.tmpFilename)
 				}
 				os.Remove(picture.tmpFilename)
 				os.Remove(*outputfileName)
@@ -378,7 +379,7 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 			// no object detection
 			//
 			message := fmt.Sprintf("[%d of %d] %s", fileCount, maxFiles, picture.timeStamp)
-			err = alert(signalUser, signalRecipient, message, picture.tmpFilename)
+			err = alert(signalUser, signalRecipient, signalGroup, message, picture.tmpFilename)
 			os.Remove(picture.tmpFilename)
 			if err != nil {
 				log.Println(err.Error())
@@ -401,8 +402,8 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 }
 
 // send an alert via signal
-func alert(signalUser *string, signalRecipient *string, message string, attachments string) error {
-	if len(*signalUser) > 0 && len(*signalRecipient) > 0 {
+func alert(signalUser *string, signalRecipient *string, signalGroup *string, message string, attachments string) error {
+	if (len(*signalUser) > 0) && (len(*signalGroup) > 0 || len(*signalRecipient) > 0) {
 
 		// keep signal happy
 		//
@@ -417,7 +418,12 @@ func alert(signalUser *string, signalRecipient *string, message string, attachme
 		args = append(args, "-u")
 		args = append(args, *signalUser)
 		args = append(args, "send")
-		args = append(args, strings.Split(*signalRecipient, " ")...)
+		if len(*signalGroup) > 0 {
+			args = append(args, "-g")
+			args = append(args, *signalGroup)
+		} else {
+			args = append(args, strings.Split(*signalRecipient, " ")...)
+		}
 		if len(message) > 0 {
 			args = append(args, "-m")
 			args = append(args, message)
