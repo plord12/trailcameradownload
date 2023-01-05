@@ -323,7 +323,7 @@ func main() {
 }
 
 // process work in a queue
-func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalGroup *string, signalRecipient *string, limits *int, undeletedPath string, maxFiles int) {
+func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalRecipient *string, signalGroup *string, limits *int, undeletedPath string, maxFiles int) {
 	defer wg.Done()
 
 	var undeletedFile *os.File = nil
