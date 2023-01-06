@@ -181,6 +181,23 @@ func loadModel(modelPath *string, labelPath *string, xnnpack *bool) error {
 	return nil
 }
 
+func bold(original string) string {
+
+	makeBold := func(r rune) rune {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			return r - 'A' + '𝐀'
+		case r >= 'a' && r <= 'z':
+			return r - 'a' + '𝐚'
+		case r >= '0' && r <= '9':
+			return r - '0' + '𝟎'
+		}
+
+		return r
+	}
+	return strings.Map(makeBold, original)
+}
+
 func objectDetect(inputVideo *string, limits *int, testmode bool) (*string, *string, error) {
 
 	if labels == nil || model == nil {
@@ -312,11 +329,18 @@ func objectDetect(inputVideo *string, limits *int, testmode bool) (*string, *str
 	})
 
 	description := ""
+	first := true
 	for _, name := range keys {
 		averageScore := objects[name] * 100.0 / float64(frames)
 		log.Printf("%s (%0.1f%%)\n", name, averageScore)
 		if averageScore > 5 {
-			description = fmt.Sprintf("%s %s (%0.1f%%)", description, strings.Replace(name, "_", " ", -1), averageScore)
+			if first {
+				description = fmt.Sprintf("%s %s (%0.1f%%)", description, bold(strings.Replace(name, "_", " ", -1)), averageScore)
+			} else {
+				description = fmt.Sprintf("%s %s (%0.1f%%)", description, strings.Replace(name, "_", " ", -1), averageScore)
+			}
+
+			first = false
 		}
 	}
 
