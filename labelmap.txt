@@ -18,5 +18,6 @@ Common_Hedgehog
 Red_Fox
 Eastern_Gray_Squirrel
 Domestic_Cat
+Brown_Rat
 Person
 Common_Dandelion

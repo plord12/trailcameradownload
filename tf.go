@@ -339,7 +339,6 @@ func objectDetect(inputVideo *string, limits *int, testmode bool) (*string, *str
 			} else {
 				description = fmt.Sprintf("%s %s (%0.1f%%)", description, strings.Replace(name, "_", " ", -1), averageScore)
 			}
-
 			first = false
 		}
 	}
