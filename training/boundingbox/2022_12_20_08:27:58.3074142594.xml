@@ -1,0 +1,26 @@
+<annotation>
+	<folder>tmp</folder>
+	<filename>2022_12_20_08:27:58.3074142594.jpg</filename>
+	<path>images/all/2022_12_20_08:27:58.3074142594.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1024</width>
+		<height>576</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>Eurasian_Collared_Dove</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>1</difficult>
+		<bndbox>
+			<xmin>408</xmin>
+			<ymin>260</ymin>
+			<xmax>523</xmax>
+			<ymax>334</ymax>
+		</bndbox>
+	</object>
+</annotation>

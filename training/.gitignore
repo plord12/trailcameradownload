@@ -1,0 +1,13 @@
+train
+val
+garden
+VOCdevkit
+images
+labelmap.pbtxt
+labelmap.txt
+models
+train.tfrecord
+training
+val.tfrecord
+create_csv.py
+create_tfrecord.py
