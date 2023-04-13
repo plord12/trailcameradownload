@@ -91,7 +91,7 @@ func main() {
 
 	if len(*testfiles) > 0 {
 		for _, picture := range strings.Split(*testfiles, ",") {
-			outputfileName, description, err := objectDetect(&picture, limits, true)
+			outputfileName, description, _, err := objectDetect(&picture, limits, true)
 			if err == nil {
 				destinationFile := strings.TrimSuffix(picture, filepath.Ext(picture)) + "-out" + filepath.Ext(picture)
 				input, err := ioutil.ReadFile(*outputfileName)
@@ -343,7 +343,7 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 	for picture := range jobChan {
 
 		if modelLoaded {
-			outputfileName, description, err := objectDetect(&picture.tmpFilename, limits, false)
+			outputfileName, description, _, err := objectDetect(&picture.tmpFilename, limits, false)
 			if err != nil {
 				log.Println(err.Error())
 				err = alert(signalUser, signalRecipient, signalGroup, picture.timeStamp, picture.tmpFilename)
