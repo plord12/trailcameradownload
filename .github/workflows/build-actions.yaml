@@ -21,7 +21,8 @@ jobs:
         run: |
           set -x
           #sudo apt-get install cmake
-          sudo apt-get install bazel
+          sudo curl -L -o /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/download/v1.16.0/bazelisk-linux-amd64 
+          sudo chmod a+x /usr/local/bin/bazel
           export USE_BAZEL_VERSION=5.1.1
           git clone https://github.com/tensorflow/tensorflow.git tensorflow_src
           cd tensorflow_src
