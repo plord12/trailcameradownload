@@ -16,7 +16,7 @@ jobs:
 
       - name: Install tensorflow
         run: |
-          pip install tensorflow
+          pip install tflite-runtime
           find ${HOME}/.local -name c_api.h 2>/dev/null
 
       - name: Build
