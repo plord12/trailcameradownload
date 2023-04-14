@@ -19,4 +19,4 @@ jobs:
           pip install tensorflow
 
       - name: Build
-        run: make
+        run: go test -v
