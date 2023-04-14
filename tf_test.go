@@ -52,7 +52,7 @@ func TestTF(t *testing.T) {
 		if (*names)[0] != animal {
 			t.Errorf("%s: didn't match - see %s", animal, *outputfileName)
 		} else {
-			os.Remove(*outputfileName)
+			log.Printf("%s: Output image at %s\n", animal, *outputfileName)
 		}
 	}
 
