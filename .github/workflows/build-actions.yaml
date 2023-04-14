@@ -35,8 +35,7 @@ jobs:
 	          --copt -DCL_DELEGATE_NO_GL \
 	          --copt -DEGL_NO_X11 \
 	          --copt -DMESA_EGL_NO_X11_HEADERS \
-	          //tensorflow/lite:libtensorflowlite.so //tensorflow/lite/c:libtensorflowlite_c.so //tensorflow/lite/delegates/gpu/cl:gpu_api_delegate //tensorflow/lite/delegates/gp
-u:libtensorflowlite_gpu_delegate.so
+	          //tensorflow/lite:libtensorflowlite.so //tensorflow/lite/c:libtensorflowlite_c.so //tensorflow/lite/delegates/gpu/cl:gpu_api_delegate //tensorflow/lite/delegates/gpu:libtensorflowlite_gpu_delegate.so
           sudo cp bazel-bin/tensorflow/lite/*so /usr/local/lib
           sudo cp bazel-bin/tensorflow/lite/c/*so /usr/local/lib
           sudo cp bazel-bin/tensorflow/lite/delegates/gpu/*.so /usr/local/lib
