@@ -14,6 +14,9 @@ jobs:
         with:
           go-version: 1.19
 
+      - name: Install opencv
+        run: sudo apt-get install libopencv-dev
+
       - name: Build tensorflow lite
         run: |
           set -x
@@ -25,29 +28,25 @@ jobs:
           mkdir tflite_build
           cd tflite_build
           cmake ../tensorflow_src/tensorflow/lite -DTFLITE_ENABLE_XNNPACK=1 -DBUILD_SHARED_LIBS=1
-          cmake --build . -j 2
+          cmake --build . -j 4
           cd ..
-          find . -name c_api.h
-          find . -name \*.so
-          sudo mkdir -p /usr/local/include/tensorflow/lite/c /usr/local/include/tensorflow/lite/core/c
-          sudo cp tensorflow_src/tensorflow/lite/*.h /usr/local/include/tensorflow/lite
-          sudo cp tensorflow_src/tensorflow/lite/core/c/*.h /usr/local/include/tensorflow/lite/core/c
-          sudo mkdir -p /usr/local/include/tensorflow/lite/delegates/xnnpack
-          sudo cp tensorflow_src/tensorflow/lite/delegates/xnnpack/*.h /usr/local/include/tensorflow/lite/delegates/xnnpack
-          sudo cp tflite_build/*.so /usr/local/lib
           mkdir tflite_c_build
           cd tflite_c_build
           cmake ../tensorflow_src/tensorflow/lite/c -DTFLITE_ENABLE_XNNPACK=1 -DBUILD_SHARED_LIBS=1
-          cmake --build . -j 2
+          cmake --build . -j 4
           cd ..
-          find . -name \*.so
-          sudo cp tflite_c_build/*.so /usr/local/lib/
+          find tflite_build tflite_c_build -name \*.so
+          sudo mkdir -p /usr/local/include/tensorflow/lite/c /usr/local/include/tensorflow/lite/core/c /usr/local/include/tensorflow/lite/delegates/xnnpack
+          sudo cp tensorflow_src/tensorflow/lite/*.h /usr/local/include/tensorflow/lite
+          sudo cp tensorflow_src/tensorflow/lite/core/c/*.h /usr/local/include/tensorflow/lite/core/c
+          sudo cp tensorflow_src/tensorflow/lite/delegates/xnnpack/*.h /usr/local/include/tensorflow/lite/delegates/xnnpack
           sudo cp tensorflow_src/tensorflow/lite/c/*.h /usr/local/include/tensorflow/lite/c
+          sudo cp tflite_build/*.so /usr/local/lib
+          sudo cp tflite_c_build/*.so /usr/local/lib/
 
       - name: Run tests
         run: |
           rm -f /tmp/detected*.jpg
-          ls -R /usr/local/lib /usr/local/include/tensorflow
           go test -v
 
       - name: Create montage
