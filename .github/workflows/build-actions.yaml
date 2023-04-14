@@ -66,9 +66,10 @@ jobs:
           set -x
           rm -f /tmp/detected*.jpg
           mkdir -p bin
-          CGO_LDFLAGS=-L/usr/local/lib GOARCH=amd64 GOOS=linux go build -x -o bin/trailcameradownload-linux-amd64
+          export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib
+          CGO_LDFLAGS=-L/usr/local/lib go build -o bin/trailcameradownload-linux-amd64
           ldd bin/trailcameradownload-linux-amd64
-          CGO_LDFLAGS=-L/usr/local/lib go test -x -v
+          CGO_LDFLAGS=-L/usr/local/lib go test -v
 
       - name: Create montage
         run: montage /tmp/detected*.jpg -geometry 1024x1024+2+2 montage.jpg
