@@ -24,7 +24,7 @@ jobs:
           mkdir tflite_build
           cd tflite_build
           cmake ../tensorflow_src/tensorflow/lite/c
-          cmake --build . -j
+          cmake --build . 
           find ${HOME} -name c_api.h
 
       - name: Build
