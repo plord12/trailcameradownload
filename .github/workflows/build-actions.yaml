@@ -32,8 +32,6 @@ jobs:
           bazel build -c opt --config monolithic  --define tflite_with_xnnpack=true --define tflite_keep_symbols=true --define if_enable_acl=true --copt -DCL_DELEGATE_NO_GL --copt -DEGL_NO_X11 --copt -DMESA_EGL_NO_X11_HEADERS //tensorflow/lite:libtensorflowlite.so //tensorflow/lite/c:libtensorflowlite_c.so
           sudo cp bazel-bin/tensorflow/lite/*so /usr/local/lib
           sudo cp bazel-bin/tensorflow/lite/c/*so /usr/local/lib
-          sudo cp bazel-bin/tensorflow/lite/delegates/gpu/*.so /usr/local/lib
-          sudo cp bazel-bin/tensorflow/lite/delegates/gpu/cl/*.so /usr/local/lib
           #sudo cp /home/plord/src/tensorflow/tensorflow_src/bazel-bin/tensorflow/lite/delegates/xnnpack/*.a /usr/local/lib
           sudo mkdir -p /usr/local/include/tensorflow/lite
           sudo cp tensorflow/lite/*.h /usr/local/include/tensorflow/lite
@@ -41,9 +39,6 @@ jobs:
           sudo cp tensorflow/lite/c/*.h /usr/local/include/tensorflow/lite/c
           sudo mkdir -p /usr/local/include/tensorflow/lite/delegates/xnnpack
           sudo cp tensorflow/lite/delegates/xnnpack/*.h /usr/local/include/tensorflow/lite/delegates/xnnpack
-          sudo mkdir -p /usr/local/include/tensorflow/lite/delegates/gpu/cl
-          sudo cp tensorflow/lite/delegates/gpu/*.h /usr/local/include/tensorflow/lite/delegates/gpu
-          sudo cp tensorflow/lite/delegates/gpu/cl/*.h /usr/local/include/tensorflow/lite/delegates/gpu/cl
           sudo mkdir -p /usr/local/include/tensorflow/lite/core/c
           sudo cp tensorflow/lite/core/c/*.h /usr/local/include/tensorflow/lite/core/c
           # cd ..
