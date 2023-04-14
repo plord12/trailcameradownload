@@ -14,8 +14,9 @@ jobs:
         with:
           go-version: 1.19
 
-      - name: Install tensorflow
+      - name: Build tensorflow lite
         run: |
+          set -x
           sudo apt-get install cmake
           git clone https://github.com/tensorflow/tensorflow.git tensorflow_src
           cd tensorflow_src
@@ -28,8 +29,9 @@ jobs:
           cd ..
           find . -name c_api.h
           find . -name \*.so
-          sudo mkdir -p /usr/local/include/tensorflow/lite/c
+          sudo mkdir -p /usr/local/include/tensorflow/lite/c /usr/local/include/tensorflow/lite/core/c
           sudo cp tensorflow_src/tensorflow/lite/*.h /usr/local/include/tensorflow/lite
+          sudo cp tensorflow_src/tensorflow/lite/core/c/*.h /usr/local/include/tensorflow/lite/core/c
           sudo mkdir -p /usr/local/include/tensorflow/lite/delegates/xnnpack
           sudo cp tensorflow_src/tensorflow/lite/delegates/xnnpack/*.h /usr/local/include/tensorflow/lite/delegates/xnnpack
           sudo cp tflite_build/*.so /usr/local/lib
@@ -43,7 +45,16 @@ jobs:
           sudo cp tensorflow_src/tensorflow/lite/c/*.h /usr/local/include/tensorflow/lite/c
 
       - name: Run tests
-        run: go test -v
+        run: |
+          rm -f /tmp/detected*.jpg
+          ls -R /usr/local/lib /usr/local/include/tensorflow
+          go test -v
 
       - name: Create montage
-        run: montage /tmp/*.jpg montage.jpg
+        run: montage /tmp/detected*.jpg -geometry 1024x1024+2+2 montage.jpg
+
+      - name: Archive montage
+        uses: actions/upload-artifact@v3
+        with:
+          name: montage
+          path: montage.jpg
