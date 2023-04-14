@@ -24,9 +24,13 @@ jobs:
           mkdir tflite_build
           cd tflite_build
           cmake ../tensorflow_src/tensorflow/lite/c
-          cmake --build . 
+          cmake --build . -j 2
           cd ..
-          find . -name c_api.h
 
-      - name: Build
-        run: CGO_CFLAGS=-Itensorflow_src go test -v
+      - name: Run tests
+        run: |
+          find . -name c_api.h
+          CGO_CFLAGS=-Itensorflow_src go test -v
+
+      - name: Create montage
+        run: montage /tmp/*.jpg montage.jpg
