@@ -1,8 +1,8 @@
 package main
 
 import (
-	"os"
 	"testing"
+	"log"
 )
 
 func TestTF(t *testing.T) {
