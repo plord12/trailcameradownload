@@ -110,6 +110,12 @@ $ trailcameradownload-linux-arm64 -signalrecipient "+44xxxxxxxxxx" -signaluser +
 
 <img src="phone.jpg" width="400">
 
+## Testing
+
+Simple unit tests have been added - see [Github Actions](https://github.com/plord12/trailcameradownload/actions).
+
+![example workflow](https://github.com/plord12/trailcameradownload/actions/workflows/build-actions.yaml/badge.svg)
+
 ## Training
 
 The `training` directory contains the scripts used to download images and train the tensorflow model.
