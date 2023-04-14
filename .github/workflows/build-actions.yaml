@@ -17,6 +17,7 @@ jobs:
       - name: Install tensorflow
         run: |
           sudo apt-get install cmake
+          cd ${HOME}
           git clone https://github.com/tensorflow/tensorflow.git tensorflow_src
           cd tensorflow_src
           git checkout v2.11.0
@@ -28,4 +29,4 @@ jobs:
           find ${HOME} -name c_api.h
 
       - name: Build
-        run: CGO_CFLAGS=-I${HOME}/.local/lib/python3.10/site-packages/tensorflow/include go test -v
+        run: CGO_CFLAGS=-I${HOME}/tensorflow_src go test -v
