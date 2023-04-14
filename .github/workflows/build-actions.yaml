@@ -23,14 +23,27 @@ jobs:
           cd ..
           mkdir tflite_build
           cd tflite_build
-          cmake ../tensorflow_src/tensorflow/lite/c
+          cmake ../tensorflow_src/tensorflow/lite -DTFLITE_ENABLE_XNNPACK=1 -DBUILD_SHARED_LIBS=1
           cmake --build . -j 2
           cd ..
+          find . -name c_api.h
+          find . -name \*.so
+          sudo mkdir -p /usr/local/include/tensorflow/lite/c
+          sudo cp tensorflow_src/tensorflow/lite/*.h /usr/local/include/tensorflow/lite
+          sudo mkdir -p /usr/local/include/tensorflow/lite/delegates/xnnpack
+          sudo cp tensorflow_src/tensorflow/lite/delegates/xnnpack/*.h /usr/local/include/tensorflow/lite/delegates/xnnpack
+          sudo cp tflite_build/*.so /usr/local/lib
+          mkdir tflite_c_build
+          cd tflite_c_build
+          cmake ../tensorflow_src/tensorflow/lite/c -DTFLITE_ENABLE_XNNPACK=1 -DBUILD_SHARED_LIBS=1
+          cmake --build . -j 2
+          cd ..
+          find . -name \*.so
+          sudo cp tflite_c_build/*.so /usr/local/lib/
+          sudo cp tensorflow_src/tensorflow/lite/c/*.h /usr/local/include/tensorflow/lite/c
 
       - name: Run tests
-        run: |
-          find . -name c_api.h
-          CGO_CFLAGS=-Itensorflow_src go test -v
+        run: go test -v
 
       - name: Create montage
         run: montage /tmp/*.jpg montage.jpg
