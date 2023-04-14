@@ -17,7 +17,6 @@ jobs:
       - name: Install tensorflow
         run: |
           sudo apt-get install cmake
-          cd ${HOME}
           git clone https://github.com/tensorflow/tensorflow.git tensorflow_src
           cd tensorflow_src
           git checkout v2.11.0
@@ -26,7 +25,8 @@ jobs:
           cd tflite_build
           cmake ../tensorflow_src/tensorflow/lite/c
           cmake --build . 
-          find ${HOME} -name c_api.h
+          cd ..
+          find . -name c_api.h
 
       - name: Build
-        run: CGO_CFLAGS=-I${HOME}/tensorflow_src go test -v
+        run: CGO_CFLAGS=-Itensorflow_src go test -v
