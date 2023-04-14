@@ -17,6 +17,7 @@ jobs:
       - name: Install tensorflow
         run: |
           pip install tensorflow
+          find / -name c_api.h
 
       - name: Build
         run: go test -v
