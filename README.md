@@ -116,6 +116,8 @@ Simple unit tests have been added - see [Github Actions](https://github.com/plor
 
 ![example workflow](https://github.com/plord12/trailcameradownload/actions/workflows/build-actions.yaml/badge.svg)
 
+<img src="montage.jpg" width="400">
+
 ## Training
 
 The `training` directory contains the scripts used to download images and train the tensorflow model.
