@@ -406,12 +406,14 @@ func alert(signalUser *string, signalRecipient *string, signalGroup *string, mes
 	if (len(*signalUser) > 0) && (len(*signalGroup) > 0 || len(*signalRecipient) > 0) {
 
 		// keep signal happy
+		// 
+		// better to do this from cron
 		//
-		cmd := exec.Command("signal-cli", "-u", *signalUser, "receive")
-		stdout, err := cmd.CombinedOutput()
-		if err != nil {
-			return errors.New("signal-cli failed - " + string(stdout))
-		}
+		//cmd := exec.Command("signal-cli", "-u", *signalUser, "receive")
+		//stdout, err := cmd.CombinedOutput()
+		//if err != nil {
+		//	return errors.New("signal-cli failed - " + string(stdout))
+		//}
 		//log.Println(string(stdout[:]))
 
 		var args []string
@@ -433,9 +435,9 @@ func alert(signalUser *string, signalRecipient *string, signalGroup *string, mes
 			args = append(args, strings.Split(attachments, " ")...)
 		}
 		log.Printf("signal-cli %v\n", args)
-		cmd = exec.Command("signal-cli", args...)
+		cmd := exec.Command("signal-cli", args...)
 
-		stdout, err = cmd.CombinedOutput()
+		stdout, err := cmd.CombinedOutput()
 		if err != nil {
 			return errors.New("signal-cli failed - " + string(stdout))
 		}
