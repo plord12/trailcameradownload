@@ -1,0 +1,26 @@
+<annotation>
+	<folder>tmp</folder>
+	<filename>2023_04_27_15:36:52.3236102321.jpg</filename>
+	<path>images/all/2023_04_27_15:36:52.3236102321.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1024</width>
+		<height>576</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>European_Robin</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>383</xmin>
+			<ymin>293</ymin>
+			<xmax>472</xmax>
+			<ymax>353</ymax>
+		</bndbox>
+	</object>
+</annotation>

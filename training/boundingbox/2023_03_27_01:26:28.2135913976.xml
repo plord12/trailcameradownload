@@ -1,0 +1,26 @@
+<annotation>
+	<folder>tmp</folder>
+	<filename>2023_03_27_01:26:28.2135913976.jpg</filename>
+	<path>images/all/2023_03_27_01:26:28.2135913976.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1024</width>
+		<height>576</height>
+		<depth>1</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>Red_Fox</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>227</xmin>
+			<ymin>195</ymin>
+			<xmax>564</xmax>
+			<ymax>325</ymax>
+		</bndbox>
+	</object>
+</annotation>

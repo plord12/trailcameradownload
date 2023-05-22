@@ -1,0 +1,26 @@
+<annotation>
+	<folder>tmp</folder>
+	<filename>2023_05_01_17:20:20.2411059460.jpg</filename>
+	<path>images/all/2023_05_01_17:20:20.2411059460.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1024</width>
+		<height>576</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>Domestic_Cat</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>791</xmin>
+			<ymin>318</ymin>
+			<xmax>920</xmax>
+			<ymax>384</ymax>
+		</bndbox>
+	</object>
+</annotation>
