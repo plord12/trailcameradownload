@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -61,6 +62,7 @@ func main() {
 	undeletedfiles := flag.Bool("undeletedfiles", false,
 		"maintain list of undeleted files in $HOME/.undeleted-[Bluetooth address]")
 	testfiles := flag.String("testfiles", "", "list of testfiles - disables connecting to camera")
+	mount := flag.String("mount", "/mnt/trailcamera", "Locally mounted USB directory")
 
 	flag.Parse()
 
@@ -86,8 +88,9 @@ func main() {
 	err = loadModel(modelPath, labelPath, xnnpack)
 	if err != nil {
 		log.Println(err.Error())
+	} else {
+		modelLoaded = true
 	}
-	modelLoaded = true
 
 	if len(*testfiles) > 0 {
 		for _, picture := range strings.Split(*testfiles, ",") {
@@ -113,211 +116,304 @@ func main() {
 		return
 	}
 
-	// enable wifi via bluetooth command
+	// check if camera is locally mounted
 	//
-	for attempt := 1; attempt < 10; attempt++ {
-		bluetoothDevice, bluetoothAdress, err = connectBluetooth(address)
+	_, err = os.Stat(*mount)
+	if err == nil {
+		log.Printf("Camera USB mounted")
+
+		// list files, sorted by date
+		//
+		type fileStruct struct {
+			fileName string
+			modTime  time.Time
+		}
+		var files []fileStruct
+
+		entries, err := os.ReadDir(path.Join(*mount, "DCIM", "MOVIE"))
 		if err != nil {
-			log.Printf("Bluetooth connect failed [%d of 10] - %s\n", attempt, string(err.Error()))
+			log.Println(err.Error())
+			alert(signalUser, signalRecipient, signalGroup, "Camera: unable to list files on USB", "")
+			os.Exit(1)
+		}
+		for _, e := range entries {
+			var file fileStruct
+			fileInfo, _ := e.Info()
+			file.fileName = path.Join(*mount, "DCIM", "MOVIE", fileInfo.Name())
+			file.modTime = fileInfo.ModTime()
+			files = append(files, file)
+		}
+
+		entries, err = os.ReadDir(path.Join(*mount, "DCIM", "PHOTO"))
+		if err != nil {
+			log.Println(err.Error())
+			alert(signalUser, signalRecipient, signalGroup, "Camera: unable to list files on USB", "")
+			os.Exit(1)
+		}
+		for _, e := range entries {
+			var file fileStruct
+			fileInfo, _ := e.Info()
+			file.fileName = path.Join(*mount, "DCIM", "PHOTO", fileInfo.Name())
+			file.modTime = fileInfo.ModTime()
+			files = append(files, file)
+		}
+
+		// sort by ModTime
+		//
+		sort.Slice(files, func(i, j int) bool {
+			return files[i].modTime.Before(files[j].modTime)
+		})
+
+		log.Printf("%d files on camera\n", len(files))
+
+		alert(signalUser, signalRecipient, signalGroup, "Camera: USB connected "+strconv.Itoa(len(files))+" files to download", "")
+
+		jobChan := make(chan Picture, len(files))
+		wg.Add(1)
+		go workerLocal(jobChan, signalUser, signalRecipient, signalGroup, limits, len(files))
+
+		for i := 0; i < len(files); i++ {
+			// queue processing and deleting
+			jobChan <- Picture{files[i].fileName, files[i].fileName, files[i].modTime.String()}
+
+			// save a copy of the file
+			if *savejpg && (strings.EqualFold(filepath.Ext(files[i].fileName), ".JPG") || strings.EqualFold(filepath.Ext(files[i].fileName), ".JPEG")) {
+				source, err := os.Open(files[i].fileName)
+				if err != nil {
+					log.Printf("Unable to open %s for copy - %s\n", files[i], err.Error())
+					break
+				}
+				defer source.Close()
+				destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", strings.Replace(strings.Replace(files[i].modTime.String()+".*.jpg", "/", "_", -1), " ", "_", -1))
+				if err != nil {
+					log.Printf("Unable to open %s for copy - %s\n", os.Getenv("HOME")+"/photos/"+files[i].modTime.String()+".*.jpg", err.Error())
+					break
+				}
+				_, err = io.Copy(destination, source)
+				if err != nil {
+					log.Printf("Unable to copy %s - %s\n", files[i], err.Error())
+					break
+				}
+				defer destination.Close()
+			}
+		}
+
+		log.Println("Finished download")
+
+		// wait for queue to complete
+		//
+		close(jobChan)
+		wg.Wait()
+		log.Println("Finished")
+
+	} else {
+
+		// enable wifi via bluetooth command
+		//
+		for attempt := 1; attempt < 10; attempt++ {
+			bluetoothDevice, bluetoothAdress, err = connectBluetooth(address)
+			if err != nil {
+				log.Printf("Bluetooth connect failed [%d of 10] - %s\n", attempt, string(err.Error()))
+				if bluetoothDevice != nil {
+					disableBluetooth(bluetoothDevice, uuid)
+				}
+				// wait a bit betwwen attempts
+				//
+				time.Sleep(2 * time.Second)
+			} else {
+				break
+			}
+		}
+		if err != nil {
 			if bluetoothDevice != nil {
 				disableBluetooth(bluetoothDevice, uuid)
 			}
-			// wait a bit betwwen attempts
-			//
+			log.Println(err.Error())
+			alert(signalUser, signalRecipient, signalGroup, "Camera: unable to connect via bluetooth", "")
+			os.Exit(1)
+		}
+		for attempt := 1; attempt < 10; attempt++ {
+			err = enableWifi(bluetoothDevice, uuid)
+			if err != nil {
+				log.Printf("Enable WiFi failed [%d of 10] - %s\n", attempt, string(err.Error()))
+			} else {
+				break
+			}
 			time.Sleep(2 * time.Second)
-		} else {
-			break
 		}
-	}
-	if err != nil {
-		if bluetoothDevice != nil {
+		if err != nil {
 			disableBluetooth(bluetoothDevice, uuid)
+			log.Println(err.Error())
+			alert(signalUser, signalRecipient, signalGroup, "Camera: unable to connect via WiFi", "")
+			os.Exit(1)
 		}
-		log.Println(err.Error())
-		alert(signalUser, signalRecipient, signalGroup, "Camera: unable to connect via bluetooth", "")
-		os.Exit(1)
-	}
-	for attempt := 1; attempt < 10; attempt++ {
-		err = enableWifi(bluetoothDevice, uuid)
-		if err != nil {
-			log.Printf("Enable WiFi failed [%d of 10] - %s\n", attempt, string(err.Error()))
-		} else {
-			break
+
+		// connect to wifi - loop and wait
+		//
+		var hostname string
+		var nm gonetworkmanager.NetworkManager
+		var activeConnection gonetworkmanager.ActiveConnection
+
+		for attempt := 1; attempt < 10; attempt++ {
+			nm, activeConnection, hostname, err = connectWifi(ssid, password)
+			if err != nil {
+				log.Printf("WiFi connect failed [%d of 10] - %s", attempt, string(err.Error()))
+				if activeConnection != nil {
+					disableBluetooth(bluetoothDevice, uuid)
+					disconnectWifi(nm, activeConnection)
+				}
+				// wait a bit betwwen attempts
+				//
+				time.Sleep(2 * time.Second)
+			} else {
+				break
+			}
 		}
-		time.Sleep(2 * time.Second)
-	}
-	if err != nil {
-		disableBluetooth(bluetoothDevice, uuid)
-		log.Println(err.Error())
-		alert(signalUser, signalRecipient, signalGroup, "Camera: unable to connect via WiFi", "")
-		os.Exit(1)
-	}
-
-	// connect to wifi - loop and wait
-	//
-	var hostname string
-	var nm gonetworkmanager.NetworkManager
-	var activeConnection gonetworkmanager.ActiveConnection
-
-	for attempt := 1; attempt < 10; attempt++ {
-		nm, activeConnection, hostname, err = connectWifi(ssid, password)
 		if err != nil {
-			log.Printf("WiFi connect failed [%d of 10] - %s", attempt, string(err.Error()))
 			if activeConnection != nil {
 				disableBluetooth(bluetoothDevice, uuid)
 				disconnectWifi(nm, activeConnection)
 			}
-			// wait a bit betwwen attempts
+
+			// wifi failed ... so some diagnostics
 			//
-			time.Sleep(2 * time.Second)
-		} else {
-			break
-		}
-	}
-	if err != nil {
-		if activeConnection != nil {
-			disableBluetooth(bluetoothDevice, uuid)
-			disconnectWifi(nm, activeConnection)
+			log.Println("WiFi connection failed")
+
+			log.Println("nmcli general status")
+			cmd := exec.Command("nmcli", "general", "status")
+			stdout, _ := cmd.CombinedOutput()
+			log.Println(string(stdout[:]))
+			log.Println("nmcli connection show")
+			cmd = exec.Command("nmcli", "connection", "show")
+			stdout, _ = cmd.CombinedOutput()
+			log.Println(string(stdout[:]))
+			log.Println("nmcli device status")
+			cmd = exec.Command("nmcli", "device", "status")
+			stdout, _ = cmd.CombinedOutput()
+			log.Println(string(stdout[:]))
+			log.Println("nmcli dev wifi list")
+			cmd = exec.Command("nmcli", "dev", "wifi", "list")
+			stdout, _ = cmd.CombinedOutput()
+			log.Println(string(stdout[:]))
+
+			os.Exit(1)
 		}
 
-		// wifi failed ... so some diagnostics
+		// get camera status
 		//
-		log.Println("WiFi connection failed")
+		battery, _ := status(hostname)
 
-		log.Println("nmcli general status")
-		cmd := exec.Command("nmcli", "general", "status")
-		stdout, _ := cmd.CombinedOutput()
-		log.Println(string(stdout[:]))
-		log.Println("nmcli connection show")
-		cmd = exec.Command("nmcli", "connection", "show")
-		stdout, _ = cmd.CombinedOutput()
-		log.Println(string(stdout[:]))
-		log.Println("nmcli device status")
-		cmd = exec.Command("nmcli", "device", "status")
-		stdout, _ = cmd.CombinedOutput()
-		log.Println(string(stdout[:]))
-		log.Println("nmcli dev wifi list")
-		cmd = exec.Command("nmcli", "dev", "wifi", "list")
-		stdout, _ = cmd.CombinedOutput()
-		log.Println(string(stdout[:]))
+		var undeletedPath string = ""
 
-		os.Exit(1)
-	}
-
-	// get camera status
-	//
-	battery, _ := status(hostname)
-
-	var undeletedPath string = ""
-
-	// delete any old pictures first
-	//
-	if *undeletedfiles {
-		undeletedPath = os.Getenv("HOME") + "/.undeleted-" + bluetoothAdress
-		if _, err := os.Stat(undeletedPath); err == nil {
-			file, err := os.Open(undeletedPath)
-			if err != nil {
-				log.Printf("Unable to open undeleted file - %s\n", err.Error())
-			} else {
-				defer file.Close()
-				scanner := bufio.NewScanner(file)
-				for scanner.Scan() {
-					delete(scanner.Text(), hostname)
+		// delete any old pictures first
+		//
+		if *undeletedfiles {
+			undeletedPath = os.Getenv("HOME") + "/.undeleted-" + bluetoothAdress
+			if _, err := os.Stat(undeletedPath); err == nil {
+				file, err := os.Open(undeletedPath)
+				if err != nil {
+					log.Printf("Unable to open undeleted file - %s\n", err.Error())
+				} else {
+					defer file.Close()
+					scanner := bufio.NewScanner(file)
+					for scanner.Scan() {
+						delete(scanner.Text(), hostname)
+					}
+					if err := scanner.Err(); err != nil {
+						log.Printf("Unable to read undeleted file - %s\n", err.Error())
+					}
+					file.Close()
 				}
-				if err := scanner.Err(); err != nil {
-					log.Printf("Unable to read undeleted file - %s\n", err.Error())
+				os.Remove(undeletedPath)
+			}
+		}
+
+		// download any new pictures
+		//
+		files, timestamps, err := listFiles(hostname)
+		if err != nil {
+			if activeConnection != nil {
+				disableBluetooth(bluetoothDevice, uuid)
+				disconnectWifi(nm, activeConnection)
+			}
+			log.Println(err.Error())
+			alert(signalUser, signalRecipient, signalGroup, "Camera: unable to download files", "")
+			os.Exit(1)
+		}
+
+		if battery <= 20 {
+			alert(signalUser, signalRecipient, signalGroup,
+				"Camera: battery low at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
+		} else if battery > 100 {
+			alert(signalUser, signalRecipient, signalGroup,
+				"Camera: battery charging, "+strconv.Itoa(len(files))+" files to download", "")
+		} else {
+			alert(signalUser, signalRecipient, signalGroup,
+				"Camera: battery at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
+		}
+
+		jobChan := make(chan Picture, len(files))
+		wg.Add(1)
+		go worker(jobChan, hostname, signalUser, signalRecipient, signalGroup, limits, undeletedPath, len(files))
+
+		for i := 0; i < len(files); i++ {
+			tmpFile, err := download(files[i], hostname)
+			if err != nil {
+				log.Printf("Failed to download %s - %s\n", files[i], err.Error())
+				os.Remove(tmpFile)
+				break
+			}
+			// queue processing and deleting
+			jobChan <- Picture{files[i], tmpFile, timestamps[i]}
+
+			// save a copy of the file
+			if *savejpg && (strings.EqualFold(filepath.Ext(files[i]), ".JPG") || strings.EqualFold(filepath.Ext(files[i]), ".JPEG")) {
+				source, err := os.Open(tmpFile)
+				if err != nil {
+					log.Printf("Unable to open %s for copy - %s\n", files[i], err.Error())
+					break
 				}
-				file.Close()
+				defer source.Close()
+				destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", strings.Replace(strings.Replace(timestamps[i]+".*.jpg", "/", "_", -1), " ", "_", -1))
+				if err != nil {
+					log.Printf("Unable to open %s for copy - %s\n", os.Getenv("HOME")+"/photos/"+timestamps[i]+".*.jpg", err.Error())
+					break
+				}
+				_, err = io.Copy(destination, source)
+				if err != nil {
+					log.Printf("Unable to copy %s - %s\n", files[i], err.Error())
+					break
+				}
+				defer destination.Close()
 			}
-			os.Remove(undeletedPath)
 		}
-	}
 
-	// download any new pictures
-	//
-	files, timestamps, err := listFiles(hostname)
-	if err != nil {
-		if activeConnection != nil {
-			disableBluetooth(bluetoothDevice, uuid)
-			disconnectWifi(nm, activeConnection)
-		}
-		log.Println(err.Error())
-		alert(signalUser, signalRecipient, signalGroup, "Camera: unable to download files", "")
-		os.Exit(1)
-	}
+		log.Println("Finished download")
 
-	if battery <= 20 {
-		alert(signalUser, signalRecipient, signalGroup,
-			"Camera: battery low at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
-	} else if battery > 100 {
-		alert(signalUser, signalRecipient, signalGroup,
-			"Camera: battery charging, "+strconv.Itoa(len(files))+" files to download", "")
-	} else {
-		alert(signalUser, signalRecipient, signalGroup,
-			"Camera: battery at "+strconv.Itoa(battery)+"%, "+strconv.Itoa(len(files))+" files to download", "")
-	}
+		// wait for queue to complete ... dequeue deletes the files once processed so we need to keep wifi working
+		//
+		close(jobChan)
+		wg.Wait()
+		log.Println("Finished")
 
-	jobChan := make(chan Picture, len(files))
-	wg.Add(1)
-	go worker(jobChan, hostname, signalUser, signalRecipient, signalGroup, limits, undeletedPath, len(files))
+		// disable bluetooth
+		//
+		disableBluetooth(bluetoothDevice, uuid)
 
-	for i := 0; i < len(files); i++ {
-		tmpFile, err := download(files[i], hostname)
-		if err != nil {
-			log.Printf("Failed to download %s - %s\n", files[i], err.Error())
-			os.Remove(tmpFile)
-			break
-		}
-		// queue processing and deleting
-		jobChan <- Picture{files[i], tmpFile, timestamps[i]}
+		// disconnect wifi
+		//
+		disconnectWifi(nm, activeConnection)
 
-		// save a copy of the file
-		if *savejpg && (strings.EqualFold(filepath.Ext(files[i]), ".JPG") || strings.EqualFold(filepath.Ext(files[i]), ".JPEG")) {
-			source, err := os.Open(tmpFile)
+		if *memprofile != "" {
+			f, err := os.Create(*memprofile)
 			if err != nil {
-				log.Printf("Unable to open %s for copy - %s\n", files[i], err.Error())
-				break
+				log.Fatalf("could not create memory profile: %s\n", err)
 			}
-			defer source.Close()
-			destination, err := ioutil.TempFile(os.Getenv("HOME")+"/photos/", strings.Replace(strings.Replace(timestamps[i]+".*.jpg", "/", "_", -1), " ", "_", -1))
-			if err != nil {
-				log.Printf("Unable to open %s for copy - %s\n", os.Getenv("HOME")+"/photos/"+timestamps[i]+".*.jpg", err.Error())
-				break
+			defer f.Close() // error handling omitted for example
+			runtime.GC()    // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatalf("could not write memory profile: %s\n", err)
 			}
-			_, err = io.Copy(destination, source)
-			if err != nil {
-				log.Printf("Unable to copy %s - %s\n", files[i], err.Error())
-				break
-			}
-			defer destination.Close()
-		}
-	}
-
-	log.Println("Finished download")
-
-	// wait for queue to complete ... dequeue deletes the files once processed so we need to keep wifi working
-	//
-	close(jobChan)
-	wg.Wait()
-	log.Println("Finished")
-
-	// disable bluetooth
-	//
-	disableBluetooth(bluetoothDevice, uuid)
-
-	// disconnect wifi
-	//
-	disconnectWifi(nm, activeConnection)
-
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			log.Fatalf("could not create memory profile: %s\n", err)
-		}
-		defer f.Close() // error handling omitted for example
-		runtime.GC()    // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Fatalf("could not write memory profile: %s\n", err)
 		}
 	}
 }
@@ -401,12 +497,64 @@ func worker(jobChan <-chan Picture, hostname string, signalUser *string, signalR
 	}
 }
 
+// process work in a queue (local USB)
+func workerLocal(jobChan <-chan Picture, signalUser *string, signalRecipient *string, signalGroup *string, limits *int, maxFiles int) {
+	defer wg.Done()
+
+	var err error
+	var fileCount int = 1
+
+	for picture := range jobChan {
+
+		if modelLoaded {
+			outputfileName, description, _, err := objectDetect(&picture.tmpFilename, limits, false)
+			if err != nil {
+				log.Println(err.Error())
+				err = alert(signalUser, signalRecipient, signalGroup, picture.timeStamp, picture.tmpFilename)
+			} else {
+				if len(*description) > 0 {
+					message := fmt.Sprintf("[%d of %d] %s description: %s", fileCount, maxFiles, picture.timeStamp, *description)
+					err = alert(signalUser, signalRecipient, signalGroup, message, picture.tmpFilename+" "+*outputfileName)
+				} else {
+					message := fmt.Sprintf("[%d of %d] %s", fileCount, maxFiles, picture.timeStamp)
+					err = alert(signalUser, signalRecipient, signalGroup, message, picture.tmpFilename)
+				}
+			}
+			if err != nil {
+				log.Println(err.Error())
+			} else {
+				// all good, can now delete on camera
+				//
+				err = os.Remove(picture.fileName)
+				if err != nil {
+					log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+				}
+			}
+		} else {
+			// no object detection
+			//
+			message := fmt.Sprintf("[%d of %d] %s", fileCount, maxFiles, picture.timeStamp)
+			err = alert(signalUser, signalRecipient, signalGroup, message, picture.tmpFilename)
+			if err != nil {
+				log.Println(err.Error())
+			} else {
+				err = os.Remove(picture.fileName)
+				if err != nil {
+					log.Println("Failed to delete " + picture.fileName + " - " + err.Error())
+				}
+			}
+		}
+
+		fileCount = fileCount + 1
+	}
+}
+
 // send an alert via signal
 func alert(signalUser *string, signalRecipient *string, signalGroup *string, message string, attachments string) error {
 	if (len(*signalUser) > 0) && (len(*signalGroup) > 0 || len(*signalRecipient) > 0) {
 
 		// keep signal happy
-		// 
+		//
 		// better to do this from cron
 		//
 		//cmd := exec.Command("signal-cli", "-u", *signalUser, "receive")
