@@ -180,7 +180,7 @@ func main() {
 			if *savejpg && (strings.EqualFold(filepath.Ext(files[i].fileName), ".JPG") || strings.EqualFold(filepath.Ext(files[i].fileName), ".JPEG")) {
 				source, err := os.Open(files[i].fileName)
 				if err != nil {
-					log.Printf("Unable to open %s for copy - %s\n", files[i], err.Error())
+					log.Printf("Unable to open %s for copy - %s\n", files[i].fileName, err.Error())
 					break
 				}
 				defer source.Close()
@@ -191,7 +191,7 @@ func main() {
 				}
 				_, err = io.Copy(destination, source)
 				if err != nil {
-					log.Printf("Unable to copy %s - %s\n", files[i], err.Error())
+					log.Printf("Unable to copy %s - %s\n", files[i].fileName, err.Error())
 					break
 				}
 				defer destination.Close()
