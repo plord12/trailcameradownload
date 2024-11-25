@@ -118,7 +118,7 @@ func main() {
 
 	// check if camera is locally mounted
 	//
-	_, err = os.Stat(*mount)
+	_, err = os.Stat(path.Join(*mount, "DCIM"))
 	if err == nil {
 		log.Printf("Camera USB mounted")
 
